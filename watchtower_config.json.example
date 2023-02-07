@@ -1,0 +1,90 @@
+{
+    "fuel_graphql": "https://<fuel_graphql>",
+    "ethereum_rpc": "https://<ethereum_rpc>",
+    "consenses_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "portal_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "gateway_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "duplicate_alert_delay": 900,
+    "fuel_client_watcher": {
+      "connection_alert": {
+        "alert_level": "Warn"
+      },
+      "block_production_alert": {
+        "alert_level": "Warn",
+        "max_block_time": 10 
+      },
+      "portal_withdraw_alerts": [
+        {
+          "alert_level": "Info",
+          "time_frame": 60,
+          "amount": 10
+        },
+        {
+          "alert_level": "Info",
+          "time_frame": 300,
+          "amount": 250
+        }
+      ],
+      "gateway_withdraw_alerts": [
+        {
+          "alert_level": "Info",
+          "token_name": "USDC",
+          "token_address": "0x000000000000000000000000A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          "time_frame": 60,
+          "amount": 1000
+        },
+        {
+          "alert_level": "Info",
+          "token_name": "USDC",
+          "token_address": "0x000000000000000000000000A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          "time_frame": 300,
+          "amount": 25000
+        }
+      ]
+    },
+    "ethereum_client_watcher": {
+      "connection_alert": {
+        "alert_level": "Warn"
+      },
+      "block_production_alert": {
+        "alert_level": "Warn",
+        "max_block_time": 15 
+      },
+      "account_funds_alert": {
+        "alert_level": "Warn",
+        "min_balance": 0.1
+      },
+      "consensus_invalid_commit_alert": {
+        "alert_level": "Error",
+        "alert_action": "PauseAll"
+      },
+      "portal_deposit_alerts": [
+        {
+          "alert_level": "Info",
+          "time_frame": 60,
+          "amount": 10
+        },
+        {
+          "alert_level": "Info",
+          "time_frame": 300,
+          "amount": 250
+        }
+      ],
+      "gateway_deposit_alerts": [
+        {
+          "alert_level": "Info",
+          "token_name": "USDC",
+          "token_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          "time_frame": 60,
+          "amount": 1000
+        },
+        {
+          "alert_level": "Info",
+          "token_name": "USDC",
+          "token_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          "time_frame": 300,
+          "amount": 25000
+        }
+      ]
+    }
+  }
