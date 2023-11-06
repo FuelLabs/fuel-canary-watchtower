@@ -8,6 +8,7 @@ use ethers::prelude::{abigen, SignerMiddleware};
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::signers::{Signer, Wallet};
 use ethers::types::{Filter, H160};
+use fuels::tx::Bytes32;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -57,7 +58,7 @@ impl StateContract {
         }
     }
 
-    pub async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<String>> {
+    pub async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>> {
         //CommitSubmitted(uint256 indexed commitHeight, bytes32 blockHash)
         let filter = Filter::new()
             .address(self.address)
@@ -65,13 +66,13 @@ impl StateContract {
             .from_block(from_block);
         for i in 0..ETHEREUM_CONNECTION_RETRIES {
             match self.provider.get_logs(&filter).await {
-                Ok(logs) => {
+                Ok(_logs) => {
                     // TODO
 
                     return Ok(vec![
-                        String::from("0xe605385d3c61bdb625d58b2c55999730d9916fd90b62ce4af0d143539c3a5cb9"),
-                        String::from("0x24246dd5331b1eb52588ae8c0082987b1eb679edc09a4b5da305e4ebe5425c5a"),
-                        String::from("0x3de6af85929f81780a443b8db918a37036b7fe1b2e46e32fe876250806ab739d"),
+                        Bytes32::new([1; 32]),
+                        Bytes32::new([1; 32]),
+                        Bytes32::new([1; 32]),
                     ]);
                 }
                 Err(e) => {

@@ -8,7 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 anyhow = "1.0.68"
 ethers = { version = "1.0.2", features = ["rustls"] }
-fuels = { version = "0.36", features = ["fuel-core-lib"] }
+fuels = { version = "0.49.0", features = ["fuel-core-lib"] }
 log = "0.4.17"
 log4rs = "1.2.0"
 serde = "1.0.152"
