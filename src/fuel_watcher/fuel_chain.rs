@@ -5,6 +5,7 @@ use anyhow::Result;
 use fuels::{
     client::{PageDirection, PaginationRequest},
     prelude::Provider,
+    tx::Bytes32,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -82,7 +83,7 @@ impl FuelChain {
                     let mut total: u64 = 0;
                     for block in blocks_result.results {
                         for tx_id in block.transactions {
-                            match self.get_amount_withdrawn_from_tx(&tx_id.to_string()).await {
+                            match self.get_amount_withdrawn_from_tx(&tx_id).await {
                                 Ok(amount) => {
                                     total += amount;
                                 }
@@ -102,7 +103,7 @@ impl FuelChain {
         Ok(0)
     }
 
-    pub async fn get_amount_withdrawn_from_tx(&self, tx_id: &str) -> Result<u64> {
+    pub async fn get_amount_withdrawn_from_tx(&self, tx_id: &Bytes32) -> Result<u64> {
         for i in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.get_transaction_by_id(&tx_id).await {
                 Ok(tx_result) => {
@@ -130,7 +131,7 @@ impl FuelChain {
         Ok(0)
     }
 
-    pub async fn verify_block_commit(&self, block_hash: &str) -> Result<bool> {
+    pub async fn verify_block_commit(&self, block_hash: &Bytes32) -> Result<bool> {
         for i in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.block(block_hash).await {
                 Ok(_) => return Ok(true),

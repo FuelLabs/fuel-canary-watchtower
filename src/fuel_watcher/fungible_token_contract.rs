@@ -8,11 +8,11 @@ use std::cmp::max;
 pub struct FungibleTokenContract {}
 
 impl FungibleTokenContract {
-    pub async fn new(config: &WatchtowerConfig) -> Result<Self> {
+    pub async fn new(_config: &WatchtowerConfig) -> Result<Self> {
         Ok(FungibleTokenContract {})
     }
 
-    pub async fn get_amount_withdrawn(&self, timeframe: u32, token_address: &str) -> Result<u64> {
+    pub async fn get_amount_withdrawn(&self, timeframe: u32, _token_address: &str) -> Result<u64> {
         let block_offset = timeframe as u64 / FUEL_BLOCK_TIME;
         // TODO
 
