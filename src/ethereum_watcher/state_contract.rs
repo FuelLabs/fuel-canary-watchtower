@@ -16,34 +16,38 @@ use std::sync::Arc;
 abigen!(FuelChainState, "./abi/FuelChainState.json");
 
 #[derive(Clone, Debug)]
-pub struct StateContract {
-    provider: Provider<Http>,
-    contract: FuelChainState<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
+pub struct StateContract<P>
+where
+    P: Middleware,
+{
+    provider: Arc<P>,
+    contract: FuelChainState<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>,
     address: H160,
     read_only: bool,
 }
 
-impl StateContract {
-    pub async fn new(config: &WatchtowerConfig) -> Result<Self> {
-        // setup provider
-        let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
-        let chain_id = provider.get_chainid().await?.as_u64();
+impl<P> StateContract<P>
+where
+    P: Middleware + 'static,
+{
+    pub async fn new(config: &WatchtowerConfig, provider: Arc<P>) -> Result<Self> {
+        let chain_id = provider.get_chainid().await?;
 
         // setup wallet
         let mut read_only = false;
-        let key_str = match &config.ethereum_wallet_key {
+        let key_str: String = match &config.ethereum_wallet_key {
             Some(key) => key.clone(),
             None => {
                 read_only = true;
                 String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
             }
         };
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
+        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
 
         // setup contract
         let address = Address::from_str(&config.state_contract_address)?;
-        let client = SignerMiddleware::new(provider.clone(), wallet);
-        let contract = FuelChainState::new(address, Arc::new(client));
+        let client = SignerMiddleware::new(provider.clone(),wallet);
+        let contract = FuelChainState::new(address,Arc::new(client));
 
         // verify contract setup is valid
         let contract_result = contract.paused().call().await;
@@ -66,14 +70,27 @@ impl StateContract {
             .from_block(from_block);
         for i in 0..ETHEREUM_CONNECTION_RETRIES {
             match self.provider.get_logs(&filter).await {
-                Ok(_logs) => {
-                    // TODO
+                Ok(logs) => {
+        
+                    // Create a Vec to store the extracted event data
+                    let mut extracted_data: Vec<Bytes32> = Vec::new();
 
-                    return Ok(vec![
-                        Bytes32::new([1; 32]),
-                        Bytes32::new([1; 32]),
-                        Bytes32::new([1; 32]),
-                    ]);
+                    // Iterate over the logs and extract event data
+                    for log in &logs {
+                        // Extract the non-indexed event parameter (blockHash) from the data field
+                        let mut bytes32_data: [u8; 32] = [0; 32];
+                        
+                        if log.data.len() == 32 {
+                            bytes32_data.copy_from_slice(&log.data);
+                        } else {
+                            return Err(anyhow::anyhow!("Length of log.data does not match that of 32"));
+                        }
+
+                        // Add the extracted event data to the result vector
+                        extracted_data.push( Bytes32::new(bytes32_data));
+                    }
+        
+                    return Ok(extracted_data);
                 }
                 Err(e) => {
                     if i == ETHEREUM_CONNECTION_RETRIES - 1 {
@@ -97,4 +114,237 @@ impl StateContract {
             Ok(_) => Ok(()),
         }
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use std::error;
+    use std::str::FromStr;
+
+    use ethers::prelude::*;
+    use ethers::providers::Provider;
+    use ethers::abi::Address;
+    use ethers::utils::hex;
+    use fuels::tx::Bytes32;
+    use serde_json::json;
+    use crate::WatchtowerConfig;
+    use crate::config::*;
+    use anyhow::Result;
+    use eyre::Report as ErrReport;
+    use std::sync::Arc;
+
+    use super::StateContract;
+
+    // A helper function to create a mock `WatchtowerConfig`.
+    fn mock_watchtower_config() -> WatchtowerConfig {
+        WatchtowerConfig {
+            ethereum_rpc: "http://127.0.0.1".to_string(),
+            ethereum_wallet_key: Some("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string()),
+            fuel_graphql: "https://beta-4.fuel.network/graphql".to_string(),
+            portal_contract_address: "0x03f2901Db5723639978deBed3aBA66d4EA03aF73".to_string(),
+            gateway_contract_address:  "0x07cf0FF4fdD5d73C4ea5E96bb2cFaa324A348269".to_string(),
+            state_contract_address: "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string(),
+            duplicate_alert_delay: 900,
+            fuel_client_watcher: FuelClientWatcher {
+                connection_alert: GenericAlert {
+                    alert_level: default_alert_level(),
+                    alert_action: default_alert_action(),
+                },
+                block_production_alert: BlockProductionAlert {
+                    alert_level: default_alert_level(),
+                    alert_action: default_alert_action(),
+                    max_block_time: default_max_block_time(),
+                },
+                portal_withdraw_alerts: vec![
+                    WithdrawAlert {
+                        alert_level: default_alert_level(),
+                        alert_action: default_alert_action(),
+                        token_name: default_token_name(),
+                        token_decimals: default_token_decimals_fuel(),
+                        token_address: default_token_address(),
+                        time_frame: default_time_frame(),
+                        amount: default_amount(),
+                    },
+                    // ... more mock WithdrawAlerts if necessary
+                ],
+                gateway_withdraw_alerts: vec![
+                    WithdrawAlert {
+                        alert_level: default_alert_level(),
+                        alert_action: default_alert_action(),
+                        token_name: default_token_name(),
+                        token_decimals: default_token_decimals_fuel(),
+                        token_address: default_token_address(),
+                        time_frame: default_time_frame(),
+                        amount: default_amount(),
+                    },
+                ],
+            },
+            ethereum_client_watcher: EthereumClientWatcher {
+                connection_alert: GenericAlert {
+                    alert_level: default_alert_level(),
+                    alert_action: default_alert_action(),
+                },
+                block_production_alert: BlockProductionAlert {
+                    alert_level: default_alert_level(),
+                    alert_action: default_alert_action(),
+                    max_block_time: default_max_block_time(),
+                },
+                account_funds_alert: AccountFundsAlert {
+                    alert_level: default_alert_level(),
+                    alert_action: default_alert_action(),
+                    min_balance: default_minimum_balance(),
+                },
+                invalid_state_commit_alert: GenericAlert {
+                    alert_level: default_alert_level(),
+                    alert_action: default_alert_action(),
+                },
+                portal_deposit_alerts: vec![
+                    DepositAlert {
+                        alert_level: default_alert_level(),
+                        alert_action: default_alert_action(),
+                        token_name: default_token_name(),
+                        token_decimals: default_token_decimals_ethereum(),
+                        token_address: default_token_address(),
+                        time_frame: default_time_frame(),
+                        amount: default_amount(),
+                    },
+                ],
+                gateway_deposit_alerts: vec![
+                    DepositAlert {
+                        alert_level: default_alert_level(),
+                        alert_action: default_alert_action(),
+                        token_name: default_token_name(),
+                        token_decimals: default_token_decimals_ethereum(),
+                        token_address: default_token_address(),
+                        time_frame: default_time_frame(),
+                        amount: default_amount(),
+                    },
+                ],
+            },
+        }
+    }
+
+    #[tokio::test]
+    async fn get_latest_commits_test() {
+        let (provider, mock) = Provider::mocked();
+        let config: WatchtowerConfig = mock_watchtower_config();
+        let arc_provider = Arc::new(provider);
+
+        // contract.paused().call() response
+        let paused_response_hex = format!("0x{}", "00".repeat(32));
+        mock.push_response(
+            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
+        );
+
+        // get_chainid() call response
+        mock.push(U64::from(1337)).unwrap();
+
+        // Create a new state_contract with the dependencies injected.
+        let state_contract = StateContract::new(
+            &config, arc_provider,
+        ).await.unwrap();
+
+        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
+        let expected_commit:Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
+        let log_entry = Log {
+            address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
+            topics: vec![empty_data],
+            data: expected_commit.clone(),
+            block_hash: Some(empty_data),
+            block_number: Some(U64::from(42)),
+            transaction_hash: Some(empty_data),
+            transaction_index: Some(U64::from(1)),
+            log_index: Some(U256::from(2)),
+            transaction_log_index: Some(U256::from(3)),
+            log_type: Some("mined".to_string()),
+            removed: Some(false),
+        };
+
+        mock.push::<Vec<Log>, _>(vec![log_entry]).unwrap();
+
+        let mut bytes32_data: [u8; 32] = [0; 32];
+        bytes32_data.copy_from_slice(&expected_commit);
+
+        let block_num: u64 = 42;
+        let commits = state_contract.get_latest_commits(block_num).await.unwrap();
+        assert_eq!(&commits[0].as_slice(), &bytes32_data.as_slice());
+    }
+
+    /// Here we test the `OddBlockOracle` struct (defined below) that relies
+    /// on a Provider to perform some logics.
+    /// The Provider reference is expressed with trait bounds, enforcing lose coupling,
+    /// maintainability and testability.
+    #[tokio::test]
+    async fn mocked_provider_dependency() -> eyre::Result<()> {
+        // Arrange
+        let (provider, mock) = Provider::mocked();
+        
+        let log_entry = Log {
+            address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
+            topics: vec![
+                "0x0000000000000000000000000000000000000000000000000000000000000000"
+                    .parse()
+                    .unwrap(),
+            ],
+            data: "0x123456".parse().unwrap(),
+            block_hash: Some("0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()),
+            block_number: Some(U64::from(12345)),
+            transaction_hash: Some("0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()),
+            transaction_index: Some(U64::from(1)),
+            log_index: Some(U256::from(2)),
+            transaction_log_index: Some(U256::from(3)),
+            log_type: Some("mined".to_string()),
+            removed: Some(false),
+        };
+
+        mock.push::<Vec<Log>, _>(vec![log_entry])?;
+        // mock.push(U64::from(2))?;
+
+        // Act
+        // Let's mock the provider dependency (we ❤️ DI!) then ask for the answer
+        let oracle = OddBlockOracle::new(provider);
+        let answer: bool = oracle.is_odd_block().await?;
+
+        // Assert
+        assert!(answer);
+        Ok(())
+    }
+
+    struct OddBlockOracle<P> {
+        provider: Provider<P>,
+    }
+
+    impl<P> OddBlockOracle<P>
+    where
+        P: JsonRpcClient,
+    {
+        fn new(provider: Provider<P>) -> Self {
+            Self { provider }
+        }
+
+        /// We want to test this!
+        async fn is_odd_block(&self) -> eyre::Result<bool> {
+            
+            let address =  Address::from_str("0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03")?;
+            let block_num: u64 = 42;
+            //CommitSubmitted(uint256 indexed commitHeight, bytes32 blockHash)
+            let filter = Filter::new()
+                .address(address)
+                .event("CommitSubmitted(uint256,bytes32)")
+                .from_block(block_num);
+
+            let logs: Vec<Log> = self.provider.get_logs(&filter).await?;
+            
+            for log in &logs {
+                print!("{:?}", log)
+            }
+        
+            Ok(true)
+            // let block: U64 = self.provider.get_block_number().await?;
+            // let logs: Vec<log> = self.provider.get_logs(filter)
+            // Ok(block % 2 == U64::zero())
+        }
+    }
+
 }

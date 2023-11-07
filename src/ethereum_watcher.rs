@@ -12,6 +12,9 @@ use std::cmp::max;
 use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
+use std::sync::Arc;
+use ethers::providers::Provider;
+use ethers::prelude::*;
 
 pub mod state_contract;
 pub mod ethereum_chain;
@@ -31,7 +34,9 @@ pub async fn start_ethereum_watcher(
 ) -> Result<JoinHandle<()>> {
     let fuel_chain = FuelChain::new(config).await?;
     let ethereum_chain = EthereumChain::new(config).await?;
-    let state_contract = StateContract::new(config).await?;
+    let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
+    let arc_provider = Arc::new(provider);
+    let state_contract = StateContract::new(config, arc_provider).await?;
     let gateway_contract = GatewayContract::new(config).await?;
     let portal_contract = PortalContract::new(config).await?;
 
@@ -135,53 +140,53 @@ pub async fn start_ethereum_watcher(
                     }
                 }
 
-                // check invalid commits
-                if watch_config.invalid_state_commit_alert.alert_level != AlertLevel::None {
-                    match state_contract.get_latest_commits(last_commit_check_block).await {
-                        Ok(hashes) => {
-                            for hash in hashes {
-                                match fuel_chain.verify_block_commit(&hash).await {
-                                    Ok(valid) => {
-                                        if !valid {
-                                            alerts.alert(
-                                                format!("An invalid commit was made on the state contract. Hash: {hash}"),
-                                                watch_config.invalid_state_commit_alert.alert_level.clone(),
-                                            );
-                                            actions.action(
-                                                watch_config.invalid_state_commit_alert.alert_action.clone(),
-                                                Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
-                                            );
-                                        }
-                                    }
-                                    Err(e) => {
-                                        alerts.alert(
-                                            format!("Failed to check state contract commits: {e}"),
-                                            watch_config.invalid_state_commit_alert.alert_level.clone(),
-                                        );
-                                        actions.action(
-                                            watch_config.invalid_state_commit_alert.alert_action.clone(),
-                                            Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            alerts.alert(
-                                format!("Failed to check state contract commits: {e}"),
-                                watch_config.invalid_state_commit_alert.alert_level.clone(),
-                            );
-                            actions.action(
-                                watch_config.invalid_state_commit_alert.alert_action.clone(),
-                                Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
-                            );
-                        }
-                    }
-                    last_commit_check_block = match ethereum_chain.get_latest_block_number().await {
-                        Ok(block_num) => block_num,
-                        Err(_) => last_commit_check_block,
-                    };
-                }
+                // // check invalid commits
+                // if watch_config.invalid_state_commit_alert.alert_level != AlertLevel::None {
+                //     match state_contract.get_latest_commits(last_commit_check_block).await {
+                //         Ok(hashes) => {
+                //             for hash in hashes {
+                //                 match fuel_chain.verify_block_commit(&hash).await {
+                //                     Ok(valid) => {
+                //                         if !valid {
+                //                             alerts.alert(
+                //                                 format!("An invalid commit was made on the state contract. Hash: {hash}"),
+                //                                 watch_config.invalid_state_commit_alert.alert_level.clone(),
+                //                             );
+                //                             actions.action(
+                //                                 watch_config.invalid_state_commit_alert.alert_action.clone(),
+                //                                 Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
+                //                             );
+                //                         }
+                //                     }
+                //                     Err(e) => {
+                //                         alerts.alert(
+                //                             format!("Failed to check state contract commits: {e}"),
+                //                             watch_config.invalid_state_commit_alert.alert_level.clone(),
+                //                         );
+                //                         actions.action(
+                //                             watch_config.invalid_state_commit_alert.alert_action.clone(),
+                //                             Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
+                //                         );
+                //                     }
+                //                 }
+                //             }
+                //         }
+                //         Err(e) => {
+                //             alerts.alert(
+                //                 format!("Failed to check state contract commits: {e}"),
+                //                 watch_config.invalid_state_commit_alert.alert_level.clone(),
+                //             );
+                //             actions.action(
+                //                 watch_config.invalid_state_commit_alert.alert_action.clone(),
+                //                 Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
+                //             );
+                //         }
+                //     }
+                //     last_commit_check_block = match ethereum_chain.get_latest_block_number().await {
+                //         Ok(block_num) => block_num,
+                //         Err(_) => last_commit_check_block,
+                //     };
+                // }
 
                 // check base asset deposits
                 for portal_deposit_alert in &watch_config.portal_deposit_alerts {

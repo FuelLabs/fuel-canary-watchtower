@@ -134,7 +134,12 @@ impl FuelChain {
     pub async fn verify_block_commit(&self, block_hash: &Bytes32) -> Result<bool> {
         for i in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.block(block_hash).await {
-                Ok(_) => return Ok(true),
+                Ok(Some(_)) => {
+                    return Ok(true);
+                }
+                Ok(None) => {
+                    return Ok(false);
+                }
                 Err(e) => {
                     if i == FUEL_CONNECTION_RETRIES - 1 {
                         return Err(anyhow::anyhow!("{e}"));

@@ -8,6 +8,7 @@ use anyhow::Result;
 use ethers::providers::{Http, Middleware, Provider};
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, UnboundedSender};
+use std::sync::Arc;
 
 pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed.";
 
@@ -29,14 +30,15 @@ impl WatchtowerEthereumActions {
     pub async fn new(config: &WatchtowerConfig, alerts: WatchtowerAlerts) -> Result<Self> {
         // setup provider and check that it is valid
         let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
-        let provider_result = provider.get_chainid().await;
+        let arc_provider = Arc::new(provider);
+        let provider_result = arc_provider.get_chainid().await;
         match provider_result {
             Err(_) => return Err(anyhow::anyhow!("Invalid ethereum RPC.")),
             _ => {}
         }
 
         // setup contracts
-        let state_contract = StateContract::new(config).await?;
+        let state_contract = StateContract::new(config, arc_provider).await?;
         let gateway_contract = GatewayContract::new(config).await?;
         let portal_contract = PortalContract::new(config).await?;
 
