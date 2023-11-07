@@ -21,7 +21,8 @@ where
     P: Middleware,
 {
     provider: Arc<P>,
-    contract: FuelChainState<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>,
+    wallet:  Wallet<SigningKey>,
+    contract: Option<FuelChainState<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>>,
     address: H160,
     read_only: bool,
 }
@@ -29,36 +30,40 @@ where
 impl<P> StateContract<P>
 where
     P: Middleware + 'static,
-{
-    pub async fn new(config: &WatchtowerConfig, provider: Arc<P>) -> Result<Self> {
-        let chain_id = provider.get_chainid().await?;
+{   
+    pub fn new(
+        state_contract_address: String,
+        read_only: bool,
+        provider: Arc<P>,
+        wallet: Wallet<SigningKey>,
+    ) -> Result<Self> {
+        let address: H160 = Address::from_str(&state_contract_address)?;
 
-        // setup wallet
-        let mut read_only = false;
-        let key_str: String = match &config.ethereum_wallet_key {
-            Some(key) => key.clone(),
-            None => {
-                read_only = true;
-                String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+        Ok(StateContract {
+            provider,
+            wallet,
+            address,
+            contract: None,
+            read_only,
+        })
+    }
+
+    pub async fn initialize(&mut self) -> Result<()> {
+        
+        // Create the contract instance
+        let client = SignerMiddleware::new(
+            self.provider.clone(),
+             self.wallet.clone(),
+            );
+        let contract = FuelChainState::new(self.address, Arc::new(client));
+
+        // Try calling a read function to check if the contract is valid
+        match contract.paused().call().await {
+            Err(_) => return Err(anyhow::anyhow!("Invalid state contract.")),
+            Ok(_) => {
+                self.contract = Some(contract);
+                Ok(())
             }
-        };
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
-
-        // setup contract
-        let address = Address::from_str(&config.state_contract_address)?;
-        let client = SignerMiddleware::new(provider.clone(),wallet);
-        let contract = FuelChainState::new(address,Arc::new(client));
-
-        // verify contract setup is valid
-        let contract_result = contract.paused().call().await;
-        match contract_result {
-            Err(_) => Err(anyhow::anyhow!("Invalid state contract.")),
-            Ok(_) => Ok(StateContract {
-                provider,
-                contract,
-                address,
-                read_only,
-            }),
         }
     }
 
@@ -106,12 +111,17 @@ where
         if self.read_only {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
-
-        // TODO: implement alert on timeout and a gas escalator (https://github.com/gakonst/ethers-rs/blob/master/examples/middleware/examples/gas_escalator.rs)
-        let result = self.contract.pause().call().await;
-        match result {
-            Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
-            Ok(_) => Ok(()),
+        
+        match &self.contract {
+            Some(contract) => {
+                let result = contract.pause().call().await;
+                match result {
+                    Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
+                    Ok(_) => Ok(()),
+                };
+                Ok(())
+            }
+            None => Err(anyhow::anyhow!("Contract not initialized")),
         }
     }
 }
@@ -121,6 +131,7 @@ where
 mod tests {
     use ethers::prelude::*;
     use ethers::providers::Provider;
+    use fuels::accounts::fuel_crypto::coins_bip32::ecdsa::SigningKey;
     use crate::WatchtowerConfig;
     use crate::config::*;
     use std::sync::Arc;
@@ -222,19 +233,25 @@ mod tests {
         let arc_provider = Arc::new(provider);
 
         // contract.paused().call() response
-        let paused_response_hex = format!("0x{}", "00".repeat(32));
+        let paused_response_hex: String = format!("0x{}", "00".repeat(32));
         mock.push_response(
             MockResponse::Value(serde_json::Value::String(paused_response_hex)),
         );
+        
+        let read_only: bool = false;
+        let chain_id: U64 = ethers::types::U64::from(1337);
+        let key_str: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
+        let state_contract_address: String = "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string();
+        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
 
-        // get_chainid() call response
-        mock.push(U64::from(1337)).unwrap();
 
         // Create a new state_contract with the dependencies injected.
-        let state_contract = StateContract::new(
-            &config,
+        let state_contract: StateContract<Provider<MockProvider>> = StateContract::new(
+            state_contract_address,
+            read_only,
             arc_provider,
-        ).await?;
+            wallet,
+        )?;
 
         Ok((state_contract, config, mock))
     }

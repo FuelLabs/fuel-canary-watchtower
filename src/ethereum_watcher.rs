@@ -36,7 +36,7 @@ pub async fn start_ethereum_watcher(
     let ethereum_chain = EthereumChain::new(config).await?;
     let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
     let arc_provider = Arc::new(provider);
-    let _state_contract = StateContract::new(config, arc_provider).await?;
+    // let _state_contract = StateContract::new(config, arc_provider).await?;
     let gateway_contract = GatewayContract::new(config).await?;
     let portal_contract = PortalContract::new(config).await?;
 
