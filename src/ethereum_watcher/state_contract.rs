@@ -119,19 +119,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::error;
-    use std::str::FromStr;
-
     use ethers::prelude::*;
     use ethers::providers::Provider;
-    use ethers::abi::Address;
-    use ethers::utils::hex;
-    use fuels::tx::Bytes32;
-    use serde_json::json;
     use crate::WatchtowerConfig;
     use crate::config::*;
-    use anyhow::Result;
-    use eyre::Report as ErrReport;
     use std::sync::Arc;
 
     use super::StateContract;
@@ -225,8 +216,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn get_latest_commits_test() {
+    async fn setup_state_contract() -> Result<(StateContract<Provider<MockProvider>>, WatchtowerConfig, MockProvider), Box<dyn std::error::Error>> {
         let (provider, mock) = Provider::mocked();
         let config: WatchtowerConfig = mock_watchtower_config();
         let arc_provider = Arc::new(provider);
@@ -242,8 +232,20 @@ mod tests {
 
         // Create a new state_contract with the dependencies injected.
         let state_contract = StateContract::new(
-            &config, arc_provider,
-        ).await.unwrap();
+            &config,
+            arc_provider,
+        ).await?;
+
+        Ok((state_contract, config, mock))
+    }
+
+    #[tokio::test]
+    async fn get_latest_commits_test() {
+        let (
+            state_contract,
+            _config,
+            mock,
+        ) = setup_state_contract().await.expect("Setup failed");
 
         let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
         let expected_commit:Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
@@ -270,81 +272,4 @@ mod tests {
         let commits = state_contract.get_latest_commits(block_num).await.unwrap();
         assert_eq!(&commits[0].as_slice(), &bytes32_data.as_slice());
     }
-
-    /// Here we test the `OddBlockOracle` struct (defined below) that relies
-    /// on a Provider to perform some logics.
-    /// The Provider reference is expressed with trait bounds, enforcing lose coupling,
-    /// maintainability and testability.
-    #[tokio::test]
-    async fn mocked_provider_dependency() -> eyre::Result<()> {
-        // Arrange
-        let (provider, mock) = Provider::mocked();
-        
-        let log_entry = Log {
-            address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
-            topics: vec![
-                "0x0000000000000000000000000000000000000000000000000000000000000000"
-                    .parse()
-                    .unwrap(),
-            ],
-            data: "0x123456".parse().unwrap(),
-            block_hash: Some("0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()),
-            block_number: Some(U64::from(12345)),
-            transaction_hash: Some("0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap()),
-            transaction_index: Some(U64::from(1)),
-            log_index: Some(U256::from(2)),
-            transaction_log_index: Some(U256::from(3)),
-            log_type: Some("mined".to_string()),
-            removed: Some(false),
-        };
-
-        mock.push::<Vec<Log>, _>(vec![log_entry])?;
-        // mock.push(U64::from(2))?;
-
-        // Act
-        // Let's mock the provider dependency (we ❤️ DI!) then ask for the answer
-        let oracle = OddBlockOracle::new(provider);
-        let answer: bool = oracle.is_odd_block().await?;
-
-        // Assert
-        assert!(answer);
-        Ok(())
-    }
-
-    struct OddBlockOracle<P> {
-        provider: Provider<P>,
-    }
-
-    impl<P> OddBlockOracle<P>
-    where
-        P: JsonRpcClient,
-    {
-        fn new(provider: Provider<P>) -> Self {
-            Self { provider }
-        }
-
-        /// We want to test this!
-        async fn is_odd_block(&self) -> eyre::Result<bool> {
-            
-            let address =  Address::from_str("0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03")?;
-            let block_num: u64 = 42;
-            //CommitSubmitted(uint256 indexed commitHeight, bytes32 blockHash)
-            let filter = Filter::new()
-                .address(address)
-                .event("CommitSubmitted(uint256,bytes32)")
-                .from_block(block_num);
-
-            let logs: Vec<Log> = self.provider.get_logs(&filter).await?;
-            
-            for log in &logs {
-                print!("{:?}", log)
-            }
-        
-            Ok(true)
-            // let block: U64 = self.provider.get_block_number().await?;
-            // let logs: Vec<log> = self.provider.get_logs(filter)
-            // Ok(block % 2 == U64::zero())
-        }
-    }
-
 }
