@@ -27,7 +27,7 @@ pub struct WatchtowerAlerts {
 // TODO: buffer message alerts to avoid duplicates
 
 impl WatchtowerAlerts {
-    pub fn new(config: &WatchtowerConfig) -> Result<Self> {
+    pub fn new(_config: &WatchtowerConfig) -> Result<Self> {
         let start = SystemTime::now();
 
         // TODO: setup connection with alert messaging

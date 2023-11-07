@@ -5,11 +5,11 @@ use anyhow::Result;
 use ethers::abi::Address;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::{abigen, SignerMiddleware};
-use ethers::providers::{Http, Middleware, Provider};
+use ethers::providers::{Middleware};
 use ethers::signers::{Signer, Wallet};
 use ethers::types::{Filter, H160};
 use fuels::tx::Bytes32;
-use std::convert::TryFrom;
+
 use std::str::FromStr;
 use std::sync::Arc;
 

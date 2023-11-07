@@ -32,11 +32,11 @@ pub async fn start_ethereum_watcher(
     actions: WatchtowerEthereumActions,
     alerts: WatchtowerAlerts,
 ) -> Result<JoinHandle<()>> {
-    let fuel_chain = FuelChain::new(config).await?;
+    let _fuel_chain = FuelChain::new(config).await?;
     let ethereum_chain = EthereumChain::new(config).await?;
     let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
     let arc_provider = Arc::new(provider);
-    let state_contract = StateContract::new(config, arc_provider).await?;
+    let _state_contract = StateContract::new(config, arc_provider).await?;
     let gateway_contract = GatewayContract::new(config).await?;
     let portal_contract = PortalContract::new(config).await?;
 
@@ -46,7 +46,7 @@ pub async fn start_ethereum_watcher(
         None => None,
     };
     let commit_start_block_offset = COMMIT_CHECK_STARTING_OFFSET / ETHEREUM_BLOCK_TIME;
-    let mut last_commit_check_block = max(
+    let last_commit_check_block = max(
         ethereum_chain.get_latest_block_number().await?,
         commit_start_block_offset,
     ) - commit_start_block_offset;
