@@ -4,6 +4,7 @@ use crate::fuel_watcher::fuel_chain::FuelChain;
 use crate::WatchtowerConfig;
 
 use anyhow::Result;
+use ethers::prelude::k256::ecdsa::SigningKey;
 use state_contract::StateContract;
 use ethereum_chain::EthereumChain;
 use gateway_contract::GatewayContract;
@@ -12,6 +13,9 @@ use std::cmp::max;
 use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
+use std::sync::Arc;
+use ethers::providers::Provider;
+use ethers::prelude::*;
 
 pub mod state_contract;
 pub mod ethereum_chain;
@@ -31,7 +35,34 @@ pub async fn start_ethereum_watcher(
 ) -> Result<JoinHandle<()>> {
     let fuel_chain = FuelChain::new(config).await?;
     let ethereum_chain = EthereumChain::new(config).await?;
-    let state_contract = StateContract::new(config).await?;
+    let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
+    let chain_id = provider.get_chainid().await?.as_u64();
+    let arc_provider = Arc::new(provider);
+
+    // setup wallet
+    let mut read_only = false;
+    let key_str = match &config.ethereum_wallet_key {
+        Some(key) => key.clone(),
+        None => {
+            read_only = true;
+            String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+        }
+    };
+    let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
+    let state_contract_address: String = config.state_contract_address.to_string();
+
+
+    // Setup the contracts
+    let mut state_contract = StateContract::new(
+        state_contract_address,
+        read_only,
+        arc_provider,
+        wallet,
+    ).unwrap();
+
+    // Initialize the contracts
+    state_contract.initialize().await?;
+
     let gateway_contract = GatewayContract::new(config).await?;
     let portal_contract = PortalContract::new(config).await?;
 

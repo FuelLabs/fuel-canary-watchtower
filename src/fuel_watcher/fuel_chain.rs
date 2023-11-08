@@ -105,10 +105,10 @@ impl FuelChain {
 
     pub async fn get_amount_withdrawn_from_tx(&self, tx_id: &Bytes32) -> Result<u64> {
         for i in 0..FUEL_CONNECTION_RETRIES {
-            match self.provider.get_transaction_by_id(&tx_id).await {
+            match self.provider.get_transaction_by_id(tx_id).await {
                 Ok(tx_result) => {
                     match tx_result {
-                        Some(tx) => {
+                        Some(_tx) => {
                             // TODO
 
                             return Ok(0); ///////////////////////////////
@@ -134,7 +134,12 @@ impl FuelChain {
     pub async fn verify_block_commit(&self, block_hash: &Bytes32) -> Result<bool> {
         for i in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.block(block_hash).await {
-                Ok(_) => return Ok(true),
+                Ok(Some(_)) => {
+                    return Ok(true);
+                }
+                Ok(None) => {
+                    return Ok(false);
+                }
                 Err(e) => {
                     if i == FUEL_CONNECTION_RETRIES - 1 {
                         return Err(anyhow::anyhow!("{e}"));
@@ -149,8 +154,8 @@ impl FuelChain {
         let decimals_p1 = if decimals < 9 { decimals } else { decimals - 9 };
         let decimals_p2 = decimals - decimals_p1;
 
-        let value = value_fp * (10.0 as f64).powf(decimals_p1 as f64);
-        let value = (value as u64) * (10 as u64).pow(decimals_p2 as u32);
-        value
+        let value = value_fp * 10.0_f64.powf(decimals_p1 as f64);
+        
+        (value as u64) * 10_u64.pow(decimals_p2 as u32)
     }
 }

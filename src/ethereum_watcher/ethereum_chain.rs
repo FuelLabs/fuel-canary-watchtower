@@ -109,9 +109,9 @@ impl EthereumChain {
         let decimals_p1 = if decimals < 9 { decimals } else { decimals - 9 };
         let decimals_p2 = decimals - decimals_p1;
 
-        let value = value_fp * (10.0 as f64).powf(decimals_p1 as f64);
+        let value = value_fp * 10.0_f64.powf(decimals_p1 as f64);
         let value = U256::from(value as u64);
-        let value = value.mul((10 as u64).pow(decimals_p2 as u32));
-        value
+        
+        value.mul(10_u64.pow(decimals_p2 as u32))
     }
 }

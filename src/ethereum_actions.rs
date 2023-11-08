@@ -4,10 +4,14 @@ use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
 use crate::ethereum_watcher::portal_contract::PortalContract;
 
+use ethers::signers::{Signer, Wallet};
+use ethers::prelude::k256::ecdsa::SigningKey;
+
 use anyhow::Result;
 use ethers::providers::{Http, Middleware, Provider};
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, UnboundedSender};
+use std::sync::Arc;
 
 pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed.";
 
@@ -29,14 +33,37 @@ impl WatchtowerEthereumActions {
     pub async fn new(config: &WatchtowerConfig, alerts: WatchtowerAlerts) -> Result<Self> {
         // setup provider and check that it is valid
         let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
-        let provider_result = provider.get_chainid().await;
+        let chain_id = provider.get_chainid().await?.as_u64();
+        let arc_provider = Arc::new(provider);
+        let provider_result = arc_provider.get_chainid().await;
         match provider_result {
             Err(_) => return Err(anyhow::anyhow!("Invalid ethereum RPC.")),
             _ => {}
         }
 
-        // setup contracts
-        let state_contract = StateContract::new(config).await?;
+        // setup wallet
+        let mut read_only = false;
+        let key_str = match &config.ethereum_wallet_key {
+            Some(key) => key.clone(),
+            None => {
+                read_only = true;
+                String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+            }
+        };
+        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
+        let state_contract_address: String = config.state_contract_address.to_string();
+
+        // Setup the contracts
+        let mut state_contract = StateContract::new(
+            state_contract_address,
+            read_only,
+            arc_provider,
+            wallet,
+        ).unwrap();
+
+        // Initialize the contracts
+        state_contract.initialize().await?;
+
         let gateway_contract = GatewayContract::new(config).await?;
         let portal_contract = PortalContract::new(config).await?;
 
