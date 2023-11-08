@@ -4,6 +4,9 @@ use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
 use crate::ethereum_watcher::portal_contract::PortalContract;
 
+use ethers::signers::{Signer, Wallet};
+use ethers::prelude::k256::ecdsa::SigningKey;
+
 use anyhow::Result;
 use ethers::providers::{Http, Middleware, Provider};
 use serde::Deserialize;
@@ -30,6 +33,7 @@ impl WatchtowerEthereumActions {
     pub async fn new(config: &WatchtowerConfig, alerts: WatchtowerAlerts) -> Result<Self> {
         // setup provider and check that it is valid
         let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
+        let chain_id = provider.get_chainid().await?.as_u64();
         let arc_provider = Arc::new(provider);
         let provider_result = arc_provider.get_chainid().await;
         match provider_result {
@@ -37,8 +41,29 @@ impl WatchtowerEthereumActions {
             _ => {}
         }
 
-        // setup contracts
-        // let state_contract = StateContract::new(config, arc_provider).await?;
+        // setup wallet
+        let mut read_only = false;
+        let key_str = match &config.ethereum_wallet_key {
+            Some(key) => key.clone(),
+            None => {
+                read_only = true;
+                String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+            }
+        };
+        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
+        let state_contract_address: String = config.state_contract_address.to_string();
+
+        // Setup the contracts
+        let mut state_contract = StateContract::new(
+            state_contract_address,
+            read_only,
+            arc_provider,
+            wallet,
+        ).unwrap();
+
+        // Initialize the contracts
+        state_contract.initialize().await?;
+
         let gateway_contract = GatewayContract::new(config).await?;
         let portal_contract = PortalContract::new(config).await?;
 
@@ -52,15 +77,15 @@ impl WatchtowerEthereumActions {
                         match params.action {
                             EthereumAction::PauseState => {
                                 alerts.alert(String::from("Pausing state contract."), AlertLevel::Info);
-                                // match state_contract.pause().await {
-                                //     Err(e) => alerts.alert(e.to_string(), params.alert_level),
-                                //     Ok(_) => {
-                                //         alerts.alert(
-                                //             String::from("Successfully paused state contract."),
-                                //             AlertLevel::Info,
-                                //         );
-                                //     }
-                                // }
+                                match state_contract.pause().await {
+                                    Err(e) => alerts.alert(e.to_string(), params.alert_level),
+                                    Ok(_) => {
+                                        alerts.alert(
+                                            String::from("Successfully paused state contract."),
+                                            AlertLevel::Info,
+                                        );
+                                    }
+                                }
                             }
                             EthereumAction::PauseGateway => {
                                 alerts.alert(String::from("Pausing gateway contract."), AlertLevel::Info);
@@ -88,15 +113,15 @@ impl WatchtowerEthereumActions {
                             }
                             EthereumAction::PauseAll => {
                                 alerts.alert(String::from("Pausing all contracts."), AlertLevel::Info);
-                                // match state_contract.pause().await {
-                                //     Err(e) => alerts.alert(e.to_string(), params.alert_level.clone()),
-                                //     Ok(_) => {
-                                //         alerts.alert(
-                                //             String::from("Successfully paused state contract."),
-                                //             AlertLevel::Info,
-                                //         );
-                                //     }
-                                // };
+                                match state_contract.pause().await {
+                                    Err(e) => alerts.alert(e.to_string(), params.alert_level.clone()),
+                                    Ok(_) => {
+                                        alerts.alert(
+                                            String::from("Successfully paused state contract."),
+                                            AlertLevel::Info,
+                                        );
+                                    }
+                                };
                                 match gateway_contract.pause().await {
                                     Err(e) => alerts.alert(e.to_string(), params.alert_level.clone()),
                                     Ok(_) => {
