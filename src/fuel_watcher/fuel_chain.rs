@@ -1,13 +1,10 @@
-use std::any::Any;
 use super::{FUEL_BLOCK_TIME, FUEL_CONNECTION_RETRIES};
-use crate::WatchtowerConfig;
 
 use anyhow::Result;
 use fuels::{
     client::{PageDirection, PaginationRequest},
     tx::Bytes32,
 };
-// use ethers::prelude::{Middleware};
 use fuels::prelude::{Provider, Transaction, TransactionType};
 use fuels::types::output::Output;
 use fuels::types::tx_status::TxStatus;
@@ -16,6 +13,8 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use fuels::types::chain_info::ChainInfo;
 
+// TODO: we need create an interface for the provider, so we can create a mockprovider
+// this will allow us to test functions.
 #[derive(Clone, Debug)]
 pub struct FuelChain {
     provider: Arc<Provider>,
@@ -39,10 +38,7 @@ impl FuelChain {
         let script_bytecode: Vec<u8> = trimmed_str.as_bytes()
             .chunks(2)
             .map(|chunk| {
-                // Convert the slice of two characters into a string
                 let chunk_str = std::str::from_utf8(chunk).unwrap();
-
-                // Parse the string as a hexadecimal number
                 u8::from_str_radix(chunk_str, 16)
             })
             .collect::<Result<_, _>>()?;
@@ -54,45 +50,40 @@ impl FuelChain {
     }
 
     pub async fn check_connection(&self) -> Result<()> {
-        for i in 0..FUEL_CONNECTION_RETRIES {
-            match self.provider.chain_info().await {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    if i == FUEL_CONNECTION_RETRIES - 1 {
-                        return Err(anyhow::anyhow!("{e}"));
-                    }
-                }
+        for _ in 0..FUEL_CONNECTION_RETRIES {
+            if let Ok(_) = self.provider.chain_info().await {
+                return Ok(());
             }
         }
-        Ok(())
+        Err(anyhow::anyhow!(
+            "Failed to establish connection after {} retries", FUEL_CONNECTION_RETRIES),
+        )
     }
 
     pub async fn get_seconds_since_last_block(&self) -> Result<u32> {
+        let chain_info = self.fetch_chain_info().await?;
+
+        let latest_block_time = chain_info.latest_block.header.time.ok_or_else(
+            || anyhow::anyhow!("Failed to get latest block"))?;
+        let last_block_timestamp = (latest_block_time.timestamp_millis() as u64) / 1000;
+        let current_timestamp = (SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64) / 1000;
+
+        if current_timestamp < last_block_timestamp {
+            return Err(anyhow::anyhow!("Block time is ahead of current time"));
+        }
+
+        Ok((current_timestamp - last_block_timestamp) as u32)
+    }
+
+    async fn fetch_chain_info(&self) -> Result<ChainInfo> {
         for i in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.chain_info().await {
-                Ok(info) => {
-                    return match info.latest_block.header.time {
-                        Some(time) => {
-                            let last_block_timestamp = (time.timestamp_millis() as u64) / 1000;
-                            let millis_now =
-                                (SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64) / 1000;
-                            if millis_now >= last_block_timestamp {
-                                Ok((millis_now - last_block_timestamp) as u32)
-                            } else {
-                                Err(anyhow::anyhow!("Block time is ahead of current time"))
-                            }
-                        }
-                        None => Err(anyhow::anyhow!("Failed to get latest block")),
-                    }
-                }
-                Err(e) => {
-                    if i == FUEL_CONNECTION_RETRIES - 1 {
-                        return Err(anyhow::anyhow!("{e}"));
-                    }
-                }
+                Ok(info) => return Ok(info),
+                Err(e) if i == FUEL_CONNECTION_RETRIES - 1 => return Err(anyhow::anyhow!("{e}")),
+                _ => continue,
             }
         }
-        Ok(0)
+        Err(anyhow::anyhow!("Failed to establish connection after {} retries", FUEL_CONNECTION_RETRIES))
     }
 
     pub async fn get_amount_withdrawn(&self, timeframe: u32) -> Result<u64> {
