@@ -7,6 +7,10 @@ use fuel_chain::FuelChain;
 use fungible_token_contract::FungibleTokenContract;
 use std::thread;
 use std::time::Duration;
+use std::sync::Arc;
+
+use fuels::prelude::Provider as FuelsProvider;
+
 use tokio::task::JoinHandle;
 
 pub mod fuel_chain;
@@ -22,7 +26,20 @@ pub async fn start_fuel_watcher(
     actions: WatchtowerEthereumActions,
     alerts: WatchtowerAlerts,
 ) -> Result<JoinHandle<()>> {
-    let fuel_chain = FuelChain::new(config).await?;
+
+    // TODO MOVE IT OUT
+    let fuel_provider = FuelsProvider::connect(&config.fuel_graphql).await?;
+    // let fuel_result = fuel_provider.chain_info().await;
+    // match provider_result {
+    //     Err(e) => Err(anyhow::anyhow!("Invalid fuel graphql endpoint: {e}")),
+    //     Ok(_) => Ok(FuelChain { provider }),
+    // }
+
+    let fuel_chain: FuelChain = FuelChain::new(
+        Arc::new(fuel_provider),
+        &config.fuel_withdrawal_script,
+    ).unwrap();
+
     let fungible_token_contract = FungibleTokenContract::new(config).await?;
 
     let watch_config = config.fuel_client_watcher.clone();

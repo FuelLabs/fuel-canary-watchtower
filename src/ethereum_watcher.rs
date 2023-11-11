@@ -14,8 +14,11 @@ use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use std::sync::Arc;
-use ethers::providers::Provider;
+use ethers::providers::Provider as EthersProvider;
 use ethers::prelude::*;
+
+use fuels::prelude::Provider as FuelsProvider;
+
 
 pub mod state_contract;
 pub mod ethereum_chain;
@@ -33,15 +36,30 @@ pub async fn start_ethereum_watcher(
     actions: WatchtowerEthereumActions,
     alerts: WatchtowerAlerts,
 ) -> Result<JoinHandle<()>> {
-    let fuel_chain = FuelChain::new(config).await?;
-    let ethereum_chain = EthereumChain::new(config).await?;
-    let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
-    let chain_id = provider.get_chainid().await?.as_u64();
-    let arc_provider = Arc::new(provider);
+
+    // TODO all this needs to be taken out into their own respective functions and folders.
+
+    let fuel_provider = FuelsProvider::connect(&config.fuel_graphql).await?;
+    // let fuel_result = fuel_provider.chain_info().await;
+    // match provider_result {
+    //     Err(e) => Err(anyhow::anyhow!("Invalid fuel graphql endpoint: {e}")),
+    //     Ok(_) => Ok(FuelChain { provider }),
+    // }
+
+    let fuel_chain: FuelChain = FuelChain::new(
+        Arc::new(fuel_provider),
+        &config.fuel_withdrawal_script,
+    ).unwrap();
+    let ethereum_chain: EthereumChain = EthereumChain::new(config).await?;
+
+    let ether_provider: EthersProvider<Http> = EthersProvider::<Http>::try_from(
+        &config.ethereum_rpc)?;
+    let chain_id: u64 = ether_provider.get_chainid().await?.as_u64();
+    let arc_provider: Arc<Provider<Http>> = Arc::new(ether_provider);
 
     // setup wallet
-    let mut read_only = false;
-    let key_str = match &config.ethereum_wallet_key {
+    let mut read_only: bool = false;
+    let key_str: String = match &config.ethereum_wallet_key {
         Some(key) => key.clone(),
         None => {
             read_only = true;

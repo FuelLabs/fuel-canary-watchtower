@@ -9,7 +9,7 @@ license = "Apache-2.0"
 anyhow = "1.0.68"
 ethers = "2.0.10"
 eyre = "0.3.7"
-fuels = { version = "0.49.0", features = ["fuel-core-lib"] }
+fuels = { git = "https://github.com/VitalyVolozhinov/fuels-rs.git", branch = "master", features = ["fuel-core-lib"] }
 log = "0.4.17"
 log4rs = "1.2.0"
 serde = "1.0.152"

@@ -1,28 +1,56 @@
+use std::any::Any;
 use super::{FUEL_BLOCK_TIME, FUEL_CONNECTION_RETRIES};
 use crate::WatchtowerConfig;
 
 use anyhow::Result;
 use fuels::{
     client::{PageDirection, PaginationRequest},
-    prelude::Provider,
     tx::Bytes32,
 };
+// use ethers::prelude::{Middleware};
+use fuels::prelude::{Provider, Transaction, TransactionType};
+use fuels::types::output::Output;
+use fuels::types::tx_status::TxStatus;
+
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use fuels::types::chain_info::ChainInfo;
 
 #[derive(Clone, Debug)]
 pub struct FuelChain {
-    provider: Provider,
+    provider: Arc<Provider>,
+    script_bytecode: Vec<u8>,
 }
 
 impl FuelChain {
-    pub async fn new(config: &WatchtowerConfig) -> Result<Self> {
-        // setup provider and check that it is valid
-        let provider = Provider::connect(&config.fuel_graphql).await?;
-        let provider_result = provider.chain_info().await;
-        match provider_result {
-            Err(e) => Err(anyhow::anyhow!("Invalid fuel graphql endpoint: {e}")),
-            Ok(_) => Ok(FuelChain { provider }),
-        }
+    pub fn new(
+        provider: Arc<Provider>,
+        script_string: &str,
+    ) -> Result<Self> {
+
+        // Trim the '0x' prefix if it's present
+        let trimmed_str = if script_string.starts_with("0x") {
+            &script_string[2..]
+        } else {
+            script_string
+        };
+
+        // Convert each pair of characters into a byte
+        let script_bytecode: Vec<u8> = trimmed_str.as_bytes()
+            .chunks(2)
+            .map(|chunk| {
+                // Convert the slice of two characters into a string
+                let chunk_str = std::str::from_utf8(chunk).unwrap();
+
+                // Parse the string as a hexadecimal number
+                u8::from_str_radix(chunk_str, 16)
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(FuelChain {
+            provider,
+            script_bytecode,
+        })
     }
 
     pub async fn check_connection(&self) -> Result<()> {
@@ -104,31 +132,59 @@ impl FuelChain {
     }
 
     pub async fn get_amount_withdrawn_from_tx(&self, tx_id: &Bytes32) -> Result<u64> {
+
+        // Query the transaction from the chain within a certain number of tries.
+        let mut tx_response = None;
+
         for i in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.get_transaction_by_id(tx_id).await {
-                Ok(tx_result) => {
-                    match tx_result {
-                        Some(_tx) => {
-                            // TODO
-
-                            return Ok(0); ///////////////////////////////
-                        }
-                        None => {
-                            if i == FUEL_CONNECTION_RETRIES - 1 {
-                                return Err(anyhow::anyhow!("Failed to find details for transaction: {tx_id}"));
-                            }
-                        }
-                    }
+                Ok(Some(response)) => {
+                    tx_response = Some(response);
+                    break;
                 }
-                Err(e) => {
-                    if i == FUEL_CONNECTION_RETRIES - 1 {
-                        return Err(anyhow::anyhow!("{e}"));
-                    }
+                Ok(None) => return Ok(0), // This is a Mint Transaction that is not yet implemented.
+                Err(e) if i == FUEL_CONNECTION_RETRIES - 1 => {
+                    return Err(anyhow::anyhow!("{e}"));
                 }
+                _ => continue,
             }
         }
 
-        Ok(0)
+        // Check if the response was assigned.
+        let response = match tx_response {
+            Some(response) => response,
+            None => return Ok(0),
+        };
+
+        // Check if the status is a success, if not we return.
+        if !matches!(response.status, TxStatus::Success { .. }) {
+            return Ok(0);
+        }
+
+        // Check if the transaction is of script type, if not we return.
+        let script_tx = match response.transaction {
+            Some(TransactionType::Script(tx)) => tx,
+            _ => return Ok(0),
+        };
+
+        // Check if the script from the transaction starts with self.script_bytecode.
+        // This indicates that the script the user interacted with is the one used to
+        // withdraw tokens from fuel to the base layer.
+        if !script_tx.script().starts_with(&self.script_bytecode) {
+            return Ok(0);
+        }
+
+        // Iterate the outputs of the transactions and combine them.
+        let total_amount: u64 = script_tx.outputs().iter()
+            .filter_map(|output| match output {
+                Output::Coin { amount, .. } |
+                Output::Change { amount, .. } |
+                Output::Variable { amount, .. } => Some(*amount as u64),
+                _ => None,
+            })
+            .sum();
+
+        Ok(total_amount)
     }
 
     pub async fn verify_block_commit(&self, block_hash: &Bytes32) -> Result<bool> {
