@@ -11,6 +11,7 @@ use fuels::types::tx_status::TxStatus;
 
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use fuels::tx::Receipt;
 use fuels::types::chain_info::ChainInfo;
 
 // TODO: we need create an interface for the provider, so we can create a mockprovider
@@ -18,35 +19,12 @@ use fuels::types::chain_info::ChainInfo;
 #[derive(Clone, Debug)]
 pub struct FuelChain {
     provider: Arc<Provider>,
-    script_bytecode: Vec<u8>,
 }
 
 impl FuelChain {
-    pub fn new(
-        provider: Arc<Provider>,
-        script_string: &str,
-    ) -> Result<Self> {
 
-        // Trim the '0x' prefix if it's present
-        let trimmed_str = if script_string.starts_with("0x") {
-            &script_string[2..]
-        } else {
-            script_string
-        };
-
-        // Convert each pair of characters into a byte
-        let script_bytecode: Vec<u8> = trimmed_str.as_bytes()
-            .chunks(2)
-            .map(|chunk| {
-                let chunk_str = std::str::from_utf8(chunk).unwrap();
-                u8::from_str_radix(chunk_str, 16)
-            })
-            .collect::<Result<_, _>>()?;
-
-        Ok(FuelChain {
-            provider,
-            script_bytecode,
-        })
+    pub fn new(provider: Arc<Provider>) -> Result<Self> {
+        Ok(FuelChain { provider })
     }
 
     pub async fn check_connection(&self) -> Result<()> {
@@ -76,14 +54,15 @@ impl FuelChain {
     }
 
     async fn fetch_chain_info(&self) -> Result<ChainInfo> {
-        for i in 0..FUEL_CONNECTION_RETRIES {
+        for _ in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.chain_info().await {
                 Ok(info) => return Ok(info),
-                Err(e) if i == FUEL_CONNECTION_RETRIES - 1 => return Err(anyhow::anyhow!("{e}")),
                 _ => continue,
             }
         }
-        Err(anyhow::anyhow!("Failed to establish connection after {} retries", FUEL_CONNECTION_RETRIES))
+        Err(anyhow::anyhow!(
+            "Failed to establish connection after {} retries", FUEL_CONNECTION_RETRIES),
+        )
     }
 
     pub async fn get_amount_withdrawn(&self, timeframe: u32) -> Result<u64> {
@@ -126,6 +105,7 @@ impl FuelChain {
 
         // Query the transaction from the chain within a certain number of tries.
         let mut tx_response = None;
+        let mut total_amount:u64 = 0;
 
         for i in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.get_transaction_by_id(tx_id).await {
@@ -153,27 +133,17 @@ impl FuelChain {
         }
 
         // Check if the transaction is of script type, if not we return.
-        let script_tx = match response.transaction {
-            Some(TransactionType::Script(tx)) => tx,
-            _ => return Ok(0),
-        };
-
-        // Check if the script from the transaction starts with self.script_bytecode.
-        // This indicates that the script the user interacted with is the one used to
-        // withdraw tokens from fuel to the base layer.
-        if !script_tx.script().starts_with(&self.script_bytecode) {
+        if !matches!(response.transaction, Some(TransactionType::Script(_))) {
             return Ok(0);
         }
 
-        // Iterate the outputs of the transactions and combine them.
-        let total_amount: u64 = script_tx.outputs().iter()
-            .filter_map(|output| match output {
-                Output::Coin { amount, .. } |
-                Output::Change { amount, .. } |
-                Output::Variable { amount, .. } => Some(*amount),
-                _ => None,
-            })
-            .sum();
+        // Fetch the receipts from the transaction.
+        let receipts = self.provider.tx_status(tx_id).await?.take_receipts();
+        for receipt in receipts{
+            if let Receipt::MessageOut { amount, .. } = receipt {
+                total_amount += amount;
+            }
+        }
 
         Ok(total_amount)
     }

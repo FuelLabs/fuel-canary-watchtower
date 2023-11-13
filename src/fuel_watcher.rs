@@ -32,10 +32,7 @@ pub async fn start_fuel_watcher(
         &config.fuel_graphql,
     ).await?;
 
-    let fuel_chain: FuelChain = FuelChain::new(
-        fuel_provider,
-        &config.fuel_withdrawal_script,
-    ).unwrap();
+    let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
 
     let fungible_token_contract = FungibleTokenContract::new(config).await?;
     let watch_config = config.fuel_client_watcher.clone();

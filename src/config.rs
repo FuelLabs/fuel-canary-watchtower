@@ -14,7 +14,6 @@ pub struct WatchtowerConfig {
     pub state_contract_address: String,
     pub portal_contract_address: String,
     pub gateway_contract_address: String,
-    pub fuel_withdrawal_script: String,
     pub ethereum_wallet_key: Option<String>,
     pub duplicate_alert_delay: u32,
     pub fuel_client_watcher: FuelClientWatcher,
