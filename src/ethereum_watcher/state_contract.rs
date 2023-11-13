@@ -1,5 +1,5 @@
 use super::ETHEREUM_CONNECTION_RETRIES;
-use crate::WatchtowerConfig;
+
 
 use anyhow::Result;
 use ethers::abi::Address;
@@ -59,7 +59,7 @@ where
 
         // Try calling a read function to check if the contract is valid
         match contract.paused().call().await {
-            Err(_) => return Err(anyhow::anyhow!("Invalid state contract.")),
+            Err(_) => Err(anyhow::anyhow!("Invalid state contract.")),
             Ok(_) => {
                 self.contract = Some(contract);
                 Ok(())
@@ -147,6 +147,7 @@ mod tests {
             portal_contract_address: "0x03f2901Db5723639978deBed3aBA66d4EA03aF73".to_string(),
             gateway_contract_address:  "0x07cf0FF4fdD5d73C4ea5E96bb2cFaa324A348269".to_string(),
             state_contract_address: "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string(),
+            fuel_withdrawal_script: "0x543".to_string(),
             duplicate_alert_delay: 900,
             fuel_client_watcher: FuelClientWatcher {
                 connection_alert: GenericAlert {
