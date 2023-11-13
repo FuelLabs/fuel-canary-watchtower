@@ -1,10 +1,10 @@
 use crate::alerts::{AlertLevel, WatchtowerAlerts};
 use crate::ethereum_actions::WatchtowerEthereumActions;
 use crate::fuel_watcher::fuel_chain::FuelChain;
+use crate::fuel_watcher::fuel_utils::setup_fuel_provider;
 use crate::WatchtowerConfig;
 
 use anyhow::Result;
-use ethers::prelude::k256::ecdsa::SigningKey;
 use state_contract::StateContract;
 use ethereum_chain::EthereumChain;
 use gateway_contract::GatewayContract;
@@ -13,17 +13,13 @@ use std::cmp::max;
 use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use std::sync::Arc;
-use ethers::providers::Provider as EthersProvider;
 use ethers::prelude::*;
-
-use fuels::prelude::Provider as FuelsProvider;
-
 
 pub mod state_contract;
 pub mod ethereum_chain;
 pub mod gateway_contract;
 pub mod portal_contract;
+pub mod ethereum_utils;
 
 pub static POLL_DURATION: Duration = Duration::from_millis(6000);
 pub static POLL_LOGGING_SKIP: u64 = 50;
@@ -37,36 +33,29 @@ pub async fn start_ethereum_watcher(
     alerts: WatchtowerAlerts,
 ) -> Result<JoinHandle<()>> {
 
-    // TODO all this needs to be taken out into their own respective functions and folders.
-
-    let fuel_provider = FuelsProvider::connect(&config.fuel_graphql).await?;
-    // let fuel_result = fuel_provider.chain_info().await;
-    // match provider_result {
-    //     Err(e) => Err(anyhow::anyhow!("Invalid fuel graphql endpoint: {e}")),
-    //     Ok(_) => Ok(FuelChain { provider }),
-    // }
+    // TODO TAKE ALL THIS SETUP OUT OF HERE
+    let fuel_provider = setup_fuel_provider(&config.fuel_graphql).await?;
 
     let fuel_chain: FuelChain = FuelChain::new(
-        Arc::new(fuel_provider),
+        fuel_provider,
         &config.fuel_withdrawal_script,
     ).unwrap();
-    let ethereum_chain: EthereumChain = EthereumChain::new(config).await?;
 
-    let ether_provider: EthersProvider<Http> = EthersProvider::<Http>::try_from(
-        &config.ethereum_rpc)?;
+    let ether_provider = ethereum_utils::setup_ethereum_provider(
+        &config.ethereum_rpc,
+    ).await?;
+
     let chain_id: u64 = ether_provider.get_chainid().await?.as_u64();
-    let arc_provider: Arc<Provider<Http>> = Arc::new(ether_provider);
 
-    // setup wallet
-    let mut read_only: bool = false;
-    let key_str: String = match &config.ethereum_wallet_key {
-        Some(key) => key.clone(),
-        None => {
-            read_only = true;
-            String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-        }
-    };
-    let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
+    let (wallet, read_only) = ethereum_utils::setup_ethereum_wallet(
+        config.ethereum_wallet_key.clone(),
+        chain_id,
+    )?;
+
+    let ethereum_chain = EthereumChain::new(
+        ether_provider.clone(),
+    ).await?;
+
     let state_contract_address: String = config.state_contract_address.to_string();
 
 
@@ -74,7 +63,7 @@ pub async fn start_ethereum_watcher(
     let mut state_contract = StateContract::new(
         state_contract_address,
         read_only,
-        arc_provider,
+        ether_provider,
         wallet,
     ).unwrap();
 
@@ -86,7 +75,7 @@ pub async fn start_ethereum_watcher(
 
     let watch_config = config.ethereum_client_watcher.clone();
     let account_address = match &config.ethereum_wallet_key {
-        Some(key) => Some(EthereumChain::get_public_address(key).await?),
+        Some(key) => Some(ethereum_utils::get_public_address(key)?),
         None => None,
     };
     let commit_start_block_offset = COMMIT_CHECK_STARTING_OFFSET / ETHEREUM_BLOCK_TIME;
@@ -156,7 +145,7 @@ pub async fn start_ethereum_watcher(
                     match ethereum_chain.get_account_balance(&account_address).await {
                         Ok(balance) => {
                             let min_balance =
-                                EthereumChain::get_value(watch_config.account_funds_alert.min_balance, 18);
+                                ethereum_utils::get_value(watch_config.account_funds_alert.min_balance, 18);
                             if balance < min_balance {
                                 alerts.alert(
                                     format!(
@@ -240,7 +229,7 @@ pub async fn start_ethereum_watcher(
                         match portal_contract.get_amount_deposited(time_frame, latest_block).await {
                             Ok(amount) => {
                                 println!("Total ETH deposited: {:?}", amount);
-                                let amount_threshold = EthereumChain::get_value(portal_deposit_alert.amount, 18);
+                                let amount_threshold = ethereum_utils::get_value(portal_deposit_alert.amount, 18);
                                 if amount >= amount_threshold {
                                     alerts.alert(
                                         format!(
@@ -283,7 +272,7 @@ pub async fn start_ethereum_watcher(
                         {
                             Ok(amount) => {
                                 println!("Total Tokens deposited: {:?}", amount);
-                                let amount_threshold = EthereumChain::get_value(
+                                let amount_threshold = ethereum_utils::get_value(
                                     gateway_deposit_alert.amount,
                                     gateway_deposit_alert.token_decimals,
                                 );

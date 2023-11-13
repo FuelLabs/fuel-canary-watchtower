@@ -3,7 +3,6 @@ mod config;
 mod ethereum_actions;
 mod ethereum_watcher;
 mod fuel_watcher;
-mod ethereum_utils;
 
 pub use config::{load_config, WatchtowerConfig};
 
