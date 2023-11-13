@@ -170,7 +170,7 @@ impl FuelChain {
             .filter_map(|output| match output {
                 Output::Coin { amount, .. } |
                 Output::Change { amount, .. } |
-                Output::Variable { amount, .. } => Some(*amount as u64),
+                Output::Variable { amount, .. } => Some(*amount),
                 _ => None,
             })
             .sum();

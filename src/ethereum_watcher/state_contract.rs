@@ -1,5 +1,5 @@
 use super::ETHEREUM_CONNECTION_RETRIES;
-use crate::WatchtowerConfig;
+
 
 use anyhow::Result;
 use ethers::abi::Address;
@@ -59,7 +59,7 @@ where
 
         // Try calling a read function to check if the contract is valid
         match contract.paused().call().await {
-            Err(_) => return Err(anyhow::anyhow!("Invalid state contract.")),
+            Err(_) => Err(anyhow::anyhow!("Invalid state contract.")),
             Ok(_) => {
                 self.contract = Some(contract);
                 Ok(())
