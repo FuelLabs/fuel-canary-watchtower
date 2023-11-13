@@ -15,6 +15,7 @@ use tokio::task::JoinHandle;
 
 pub mod fuel_chain;
 pub mod fungible_token_contract;
+pub mod fuel_utils;
 
 pub static POLL_DURATION: Duration = Duration::from_millis(4000);
 pub static POLL_LOGGING_SKIP: u64 = 75;
@@ -27,21 +28,16 @@ pub async fn start_fuel_watcher(
     alerts: WatchtowerAlerts,
 ) -> Result<JoinHandle<()>> {
 
-    // TODO MOVE IT OUT
-    let fuel_provider = FuelsProvider::connect(&config.fuel_graphql).await?;
-    // let fuel_result = fuel_provider.chain_info().await;
-    // match provider_result {
-    //     Err(e) => Err(anyhow::anyhow!("Invalid fuel graphql endpoint: {e}")),
-    //     Ok(_) => Ok(FuelChain { provider }),
-    // }
+    let fuel_provider = fuel_utils::setup_fuel_provider(
+        &config.fuel_graphql,
+    ).await?;
 
     let fuel_chain: FuelChain = FuelChain::new(
-        Arc::new(fuel_provider),
+        fuel_provider,
         &config.fuel_withdrawal_script,
     ).unwrap();
 
     let fungible_token_contract = FungibleTokenContract::new(config).await?;
-
     let watch_config = config.fuel_client_watcher.clone();
 
     // start thread

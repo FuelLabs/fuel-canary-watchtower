@@ -73,6 +73,7 @@ where
             .address(self.address)
             .event("CommitSubmitted(uint256,bytes32)")
             .from_block(from_block);
+
         for i in 0..ETHEREUM_CONNECTION_RETRIES {
             match self.provider.get_logs(&filter).await {
                 Ok(logs) => {
@@ -118,7 +119,7 @@ where
                 match result {
                     Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
                     Ok(_) => Ok(()),
-                };
+                }.expect("TODO: panic message");
                 Ok(())
             }
             None => Err(anyhow::anyhow!("Contract not initialized")),
