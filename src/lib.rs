@@ -40,19 +40,15 @@ async fn handle_watcher_threads(
     ethereum_thread: JoinHandle<()>,
     alerts: &WatchtowerAlerts,
 ) -> Result<()> {
-    match ethereum_thread.await {
-        Err(e) => {
-            alerts.alert(String::from("Ethereum watcher thread failed."), AlertLevel::Error);
-            return Err(anyhow::anyhow!("Ethereum watcher thread failed: {}", e));
-        }
-        Ok(_) => {}
+
+    if let Err(e) = ethereum_thread.await {
+        alerts.alert(String::from("Ethereum watcher thread failed."), AlertLevel::Error);
+        return Err(anyhow::anyhow!("Ethereum watcher thread failed: {}", e));
     }
-    match fuel_thread.await {
-        Err(e) => {
-            alerts.alert(String::from("Fuel watcher thread failed."), AlertLevel::Error);
-            return Err(anyhow::anyhow!("Fuel watcher thread failed: {}", e));
-        }
-        Ok(_) => {}
+
+    if let Err(e) = fuel_thread.await {
+        alerts.alert(String::from("Fuel watcher thread failed."), AlertLevel::Error);
+        return Err(anyhow::anyhow!("Fuel watcher thread failed: {}", e));
     }
 
     Ok(())
