@@ -27,7 +27,7 @@ where
 
     pub async fn check_connection(&self) -> Result<()> {
         for _ in 0..ETHEREUM_CONNECTION_RETRIES {
-            if let Ok(_) = self.provider.get_chainid().await {
+            if self.provider.get_chainid().await.is_ok() {
                 return Ok(());
             }
         }
@@ -80,7 +80,7 @@ where
     }
 
     pub async fn get_account_balance(&self, addr: &str) -> Result<U256> {
-        for i in 0..ETHEREUM_CONNECTION_RETRIES {
+        for _i in 0..ETHEREUM_CONNECTION_RETRIES {
             if let Ok(balance) = self.provider.get_balance(
                 Address::from_str(addr)?,
                 None,

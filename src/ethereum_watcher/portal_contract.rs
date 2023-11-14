@@ -8,7 +8,7 @@ use ethers::providers::{Middleware};
 use ethers::signers::{Signer, Wallet};
 use ethers::types::{Filter, H160, U256};
 use std::cmp::max;
-use std::convert::TryFrom;
+
 use std::ops::Mul;
 use std::str::FromStr;
 use std::sync::Arc;

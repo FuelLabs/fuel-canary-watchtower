@@ -28,7 +28,7 @@ impl FuelChain {
 
     pub async fn check_connection(&self) -> Result<()> {
         for _ in 0..FUEL_CONNECTION_RETRIES {
-            if let Ok(_) = self.provider.chain_info().await {
+            if self.provider.chain_info().await.is_ok() {
                 return Ok(());
             }
         }

@@ -35,10 +35,10 @@ impl WatchtowerEthereumActions {
         let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
         let chain_id = provider.get_chainid().await?.as_u64();
         let arc_provider = Arc::new(provider);
+
         let provider_result = arc_provider.get_chainid().await;
-        match provider_result {
-            Err(_) => return Err(anyhow::anyhow!("Invalid ethereum RPC.")),
-            _ => {}
+        if let Err(_) = provider_result {
+            return Err(anyhow::anyhow!("Invalid ethereum RPC."));
         }
 
         // setup wallet
