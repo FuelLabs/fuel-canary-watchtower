@@ -11,76 +11,45 @@ use anyhow::Result;
 use ethereum_actions::WatchtowerEthereumActions;
 use ethereum_watcher::start_ethereum_watcher;
 use fuel_watcher::start_fuel_watcher;
+use tokio::task::JoinHandle;
 
 pub async fn run(config: &WatchtowerConfig) -> Result<()> {
+    let alerts = initialize_alerts(config)?;
+    let actions = initialize_ethereum_actions(config, &alerts).await?;
+    let fuel_thread = start_fuel_watcher(config, actions.clone(), alerts.clone()).await?;
+    let ethereum_thread = start_ethereum_watcher(config, actions.clone(), alerts.clone()).await?;
 
-    let alerts_result = WatchtowerAlerts::new(config);
-    if alerts_result.is_err() {
-        return Err(anyhow::anyhow!(
-            "Failed to setup alerts: {}",
-            alerts_result.err().unwrap()
-        ));
-    }
-    let alerts = alerts_result.unwrap();
+    handle_watcher_threads(fuel_thread, ethereum_thread, &alerts).await
+}
 
-    // build ethereum actions service
-    let actions_result = WatchtowerEthereumActions::new(
-        config,
-        alerts.clone(),
-    ).await;
-    if actions_result.is_err() {
-        return Err(anyhow::anyhow!(
-            "Failed to setup actions: {}",
-            actions_result.err().unwrap()
-        ));
-    }
-    let actions = actions_result.unwrap();
+fn initialize_alerts(config: &WatchtowerConfig) -> Result<WatchtowerAlerts> {
+    WatchtowerAlerts::new(config)
+        .map_err(|e| anyhow::anyhow!("Failed to setup alerts: {}", e))
+}
 
-    // start fuel watcher
-    let fuel_watcher_result = start_fuel_watcher(
-        config,
-        actions.clone(),
-        alerts.clone(),
-    ).await;
-    if fuel_watcher_result.is_err() {
-        return Err(anyhow::anyhow!(
-            "Failed to start fuel watcher: {}",
-            fuel_watcher_result.err().unwrap()
-        ));
-    }
-    let fuel_thread = fuel_watcher_result.unwrap();
+async fn initialize_ethereum_actions(
+    config: &WatchtowerConfig,
+    alerts: &WatchtowerAlerts,
+) -> Result<WatchtowerEthereumActions> {
+    WatchtowerEthereumActions::new(config, alerts.clone()).await
+        .map_err(|e| anyhow::anyhow!("Failed to setup actions: {}", e))
+}
 
-    // start ethereum watcher
-    let ethereum_watcher_result = start_ethereum_watcher(
-        config,
-        actions.clone(),
-        alerts.clone(),
-    ).await;
-    if ethereum_watcher_result.is_err() {
-        return Err(anyhow::anyhow!(
-            "Failed to start ethereum watcher: {}",
-            ethereum_watcher_result.err().unwrap()
-        ));
-    }
-    let ethereum_thread = ethereum_watcher_result.unwrap();
-
-    // wait for threads to finish (if ever)
+async fn handle_watcher_threads(
+    fuel_thread: JoinHandle<()>,
+    ethereum_thread: JoinHandle<()>,
+    alerts: &WatchtowerAlerts,
+) -> Result<()> {
     match ethereum_thread.await {
         Err(e) => {
-            alerts.alert(
-                String::from("Ethereum watcher thread failed."),
-                AlertLevel::Error,
-            );
+            alerts.alert(String::from("Ethereum watcher thread failed."), AlertLevel::Error);
             return Err(anyhow::anyhow!("Ethereum watcher thread failed: {}", e));
         }
         Ok(_) => {}
     }
     match fuel_thread.await {
         Err(e) => {
-            alerts.alert(
-                String::from("Fuel watcher thread failed."),
-                AlertLevel::Error,
-            );
+            alerts.alert(String::from("Fuel watcher thread failed."), AlertLevel::Error);
             return Err(anyhow::anyhow!("Fuel watcher thread failed: {}", e));
         }
         Ok(_) => {}

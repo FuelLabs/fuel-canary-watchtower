@@ -4,17 +4,12 @@ use crate::WatchtowerConfig;
 
 use anyhow::Result;
 use fuel_chain::FuelChain;
-use fungible_token_contract::FungibleTokenContract;
 use std::thread;
 use std::time::Duration;
-use std::sync::Arc;
-
-use fuels::prelude::Provider as FuelsProvider;
 
 use tokio::task::JoinHandle;
 
 pub mod fuel_chain;
-pub mod fungible_token_contract;
 pub mod fuel_utils;
 
 pub static POLL_DURATION: Duration = Duration::from_millis(4000);
@@ -28,10 +23,7 @@ pub async fn start_fuel_watcher(
     alerts: WatchtowerAlerts,
 ) -> Result<JoinHandle<()>> {
 
-    let fuel_provider = fuel_utils::setup_fuel_provider(
-        &config.fuel_graphql,
-    ).await?;
-
+    let fuel_provider = fuel_utils::setup_fuel_provider(&config.fuel_graphql).await?;
     let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
 
     // let fungible_token_contract = FungibleTokenContract::new(config).await?;

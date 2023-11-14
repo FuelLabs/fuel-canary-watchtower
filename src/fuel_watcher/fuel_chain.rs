@@ -136,15 +136,18 @@ impl FuelChain {
             return Ok(0);
         }
 
-        println!("{}", tx_id);
+        println!("{:?}", response);
 
         // Fetch the receipts from the transaction.
         let receipts = self.provider.tx_status(tx_id).await?.take_receipts();
         for receipt in receipts{
+            println!("{:?}", receipt);
             if let Receipt::MessageOut { amount, .. } = receipt {
                 total_amount += amount;
             }
         }
+
+        println!("Total Amount being Withdrawn {}", total_amount);
 
         Ok(total_amount)
     }
