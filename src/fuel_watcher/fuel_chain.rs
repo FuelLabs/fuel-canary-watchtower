@@ -5,8 +5,7 @@ use fuels::{
     client::{PageDirection, PaginationRequest},
     tx::Bytes32,
 };
-use fuels::prelude::{Provider, Transaction, TransactionType};
-use fuels::types::output::Output;
+use fuels::prelude::{Provider, TransactionType};
 use fuels::types::tx_status::TxStatus;
 
 use std::sync::Arc;
@@ -136,6 +135,8 @@ impl FuelChain {
         if !matches!(response.transaction, Some(TransactionType::Script(_))) {
             return Ok(0);
         }
+
+        println!("{}", tx_id);
 
         // Fetch the receipts from the transaction.
         let receipts = self.provider.tx_status(tx_id).await?.take_receipts();

@@ -1,11 +1,10 @@
 use super::{ETHEREUM_BLOCK_TIME, ETHEREUM_CONNECTION_RETRIES};
-use crate::WatchtowerConfig;
 
 use anyhow::Result;
 use ethers::abi::Address;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::{abigen, SignerMiddleware};
-use ethers::providers::{Http, Middleware, Provider};
+use ethers::providers::{Middleware};
 use ethers::signers::{Signer, Wallet};
 use ethers::types::{Filter, H160, U256};
 use std::cmp::max;
@@ -17,63 +16,80 @@ use std::sync::Arc;
 abigen!(FuelMessagePortal, "./abi/FuelMessagePortal.json");
 
 #[derive(Clone, Debug)]
-pub struct PortalContract {
-    provider: Provider<Http>,
-    contract: FuelMessagePortal<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
+pub struct PortalContract<P>
+where
+    P: Middleware,
+{
+    provider: Arc<P>,
+    wallet:  Wallet<SigningKey>,
+    contract: Option<FuelMessagePortal<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>>,
     address: H160,
     read_only: bool,
 }
 
-impl PortalContract {
-    pub async fn new(config: &WatchtowerConfig) -> Result<Self> {
-        // setup provider
-        let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
-        let chain_id = provider.get_chainid().await?.as_u64();
+impl <P>PortalContract<P>
+where
+    P: Middleware + 'static,
+{
+    pub fn new(
+        portal_contract_address: String,
+        read_only: bool,
+        provider: Arc<P>,
+        wallet: Wallet<SigningKey>,
+    ) -> Result<Self> {
+        let address: H160 = Address::from_str(&portal_contract_address)?;
 
-        // setup wallet
-        let mut read_only = false;
-        let key_str = match &config.ethereum_wallet_key {
-            Some(key) => key.clone(),
-            None => {
-                read_only = true;
-                String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-            }
-        };
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
+        Ok(PortalContract {
+            provider,
+            wallet,
+            address,
+            contract: None,
+            read_only,
+        })
+    }
 
-        // setup contract
-        let address = Address::from_str(&config.portal_contract_address)?;
-        let client = SignerMiddleware::new(provider.clone(), wallet);
-        let contract = FuelMessagePortal::new(address, Arc::new(client));
+    pub async fn initialize(&mut self) -> Result<()> {
 
-        // verify contract setup is valid
-        let contract_result = contract.paused().call().await;
-        match contract_result {
+        // Create the contract instance
+        let client = SignerMiddleware::new(
+            self.provider.clone(),
+            self.wallet.clone(),
+        );
+
+        let contract = FuelMessagePortal::new(
+            self.address, Arc::new(client),
+        );
+
+        // Try calling a read function to check if the contract is valid
+        match contract.paused().call().await {
             Err(_) => Err(anyhow::anyhow!("Invalid portal contract.")),
-            Ok(_) => Ok(PortalContract {
-                provider,
-                contract,
-                address,
-                read_only,
-            }),
+            Ok(_) => {
+                self.contract = Some(contract);
+                Ok(())
+            }
         }
     }
 
-    pub async fn get_amount_deposited(&self, timeframe: u32, latest_block_num: u64) -> Result<U256> {
+    pub async fn get_amount_deposited(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>{
         let block_offset = timeframe as u64 / ETHEREUM_BLOCK_TIME;
         let start_block = max(latest_block_num, block_offset) - block_offset;
 
-        //MessageSent(bytes32 indexed sender, bytes32 indexed recipient, uint256 indexed nonce, uint64 amount, bytes data)
+        // MessageSent(bytes32 indexed sender, bytes32 indexed recipient, uint256 indexed nonce,
+        // uint64 amount, bytes data)
         let filter = Filter::new()
             .address(self.address)
             .event("MessageSent(bytes32,bytes32,uint256,uint64,bytes)")
             .from_block(start_block);
+
         for i in 0..ETHEREUM_CONNECTION_RETRIES {
             match self.provider.get_logs(&filter).await {
                 Ok(logs) => {
                     let mut total = U256::zero();
                     for log in logs {
-                        let amount = U256::from_big_endian(&log.data[0..32]).mul(U256::from(1_000_000_000));
+                        let amount = U256::from_big_endian(
+                            &log.data[0..32]).mul(
+                            U256::from(1_000_000_000),
+                        );
                         total += amount;
                     }
                     return Ok(total);
@@ -88,11 +104,17 @@ impl PortalContract {
         Ok(U256::zero())
     }
 
-    pub async fn get_amount_withdrawn(&self, timeframe: u32, latest_block_num: u64) -> Result<U256> {
+    pub async fn get_amount_withdrawn(
+        &self,
+        timeframe: u32,
+        latest_block_num: u64,
+    ) -> Result<U256> {
+
         let block_offset = timeframe as u64 / ETHEREUM_BLOCK_TIME;
         let start_block = max(latest_block_num, block_offset) - block_offset;
 
-        //MessageRelayed(bytes32 indexed messageId, bytes32 indexed sender, bytes32 indexed recipient, uint64 amount)
+        // MessageRelayed(bytes32 indexed messageId, bytes32 indexed sender, bytes32 indexed
+        // recipient, uint64 amount)
         let filter = Filter::new()
             .address(self.address)
             .event("MessageRelayed(bytes32,bytes32,bytes32,uint64)")
@@ -102,7 +124,10 @@ impl PortalContract {
                 Ok(logs) => {
                     let mut total = U256::zero();
                     for log in logs {
-                        let amount = U256::from_big_endian(&log.data[0..32]).mul(U256::from(1_000_000_000));
+                        let amount = U256::from_big_endian(
+                            &log.data[0..32]).mul(
+                            U256::from(1_000_000_000),
+                        );
                         total += amount;
                     }
                     return Ok(total);
@@ -122,11 +147,16 @@ impl PortalContract {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
 
-        // TODO: implement alert on timeout and a gas escalator (https://github.com/gakonst/ethers-rs/blob/master/examples/middleware/examples/gas_escalator.rs)
-        let result = self.contract.pause().call().await;
-        match result {
-            Err(e) => Err(anyhow::anyhow!("Failed to pause portal contract: {}", e)),
-            Ok(_) => Ok(()),
+        match &self.contract {
+            Some(contract) => {
+                let result = contract.pause().call().await;
+                match result {
+                    Err(e) => Err(anyhow::anyhow!("Failed to pause portal contract: {}", e)),
+                    Ok(_) => Ok(()),
+                }.expect("TODO: panic message");
+                Ok(())
+            }
+            None => Err(anyhow::anyhow!("Contract not initialized")),
         }
     }
 }

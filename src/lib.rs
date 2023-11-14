@@ -13,7 +13,7 @@ use ethereum_watcher::start_ethereum_watcher;
 use fuel_watcher::start_fuel_watcher;
 
 pub async fn run(config: &WatchtowerConfig) -> Result<()> {
-    // build alerts service
+
     let alerts_result = WatchtowerAlerts::new(config);
     if alerts_result.is_err() {
         return Err(anyhow::anyhow!(

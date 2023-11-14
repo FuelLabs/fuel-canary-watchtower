@@ -33,13 +33,9 @@ pub async fn start_ethereum_watcher(
     alerts: WatchtowerAlerts,
 ) -> Result<JoinHandle<()>> {
 
-    // TODO TAKE ALL THIS SETUP OUT OF HERE
     let fuel_provider = setup_fuel_provider(&config.fuel_graphql).await?;
 
-    let fuel_chain: FuelChain = FuelChain::new(
-        fuel_provider,
-        &config.fuel_withdrawal_script,
-    ).unwrap();
+    let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
 
     let ether_provider = ethereum_utils::setup_ethereum_provider(
         &config.ethereum_rpc,
@@ -57,11 +53,24 @@ pub async fn start_ethereum_watcher(
     ).await?;
 
     let state_contract_address: String = config.state_contract_address.to_string();
-
+    let portal_contract_address: String = config.portal_contract_address.to_string();
+    let gateway_contract_address: String = config.gateway_contract_address.to_string();
 
     // Setup the contracts
     let mut state_contract = StateContract::new(
         state_contract_address,
+        read_only,
+        ether_provider.clone(),
+        wallet.clone(),
+    ).unwrap();
+    let mut portal_contract = PortalContract::new(
+        portal_contract_address,
+        read_only,
+        ether_provider.clone(),
+        wallet.clone(),
+    ).unwrap();
+    let mut gateway_contract = GatewayContract::new(
+        gateway_contract_address,
         read_only,
         ether_provider,
         wallet,
@@ -69,9 +78,8 @@ pub async fn start_ethereum_watcher(
 
     // Initialize the contracts
     state_contract.initialize().await?;
-
-    let gateway_contract = GatewayContract::new(config).await?;
-    let portal_contract = PortalContract::new(config).await?;
+    portal_contract.initialize().await?;
+    gateway_contract.initialize().await?;
 
     let watch_config = config.ethereum_client_watcher.clone();
     let account_address = match &config.ethereum_wallet_key {
@@ -226,7 +234,10 @@ pub async fn start_ethereum_watcher(
                     if portal_deposit_alert.alert_level != AlertLevel::None {
                         let latest_block = last_commit_check_block;
                         let time_frame = portal_deposit_alert.time_frame;
-                        match portal_contract.get_amount_deposited(time_frame, latest_block).await {
+                        match portal_contract.get_amount_deposited(
+                            time_frame,
+                            latest_block,
+                        ).await {
                             Ok(amount) => {
                                 println!("Total ETH deposited: {:?}", amount);
                                 let amount_threshold = ethereum_utils::get_value(portal_deposit_alert.amount, 18);

@@ -1,11 +1,10 @@
 use super::{ETHEREUM_BLOCK_TIME, ETHEREUM_CONNECTION_RETRIES};
-use crate::WatchtowerConfig;
 
 use anyhow::Result;
 use ethers::abi::Address;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::{abigen, SignerMiddleware};
-use ethers::providers::{Http, Middleware, Provider};
+use ethers::providers::{Middleware};
 use ethers::signers::{Signer, Wallet};
 use ethers::types::{Filter, H160, H256, U256};
 use std::cmp::max;
@@ -16,45 +15,57 @@ use std::sync::Arc;
 abigen!(FuelERC20Gateway, "./abi/FuelERC20Gateway.json");
 
 #[derive(Clone, Debug)]
-pub struct GatewayContract {
-    provider: Provider<Http>,
-    contract: FuelERC20Gateway<SignerMiddleware<Provider<Http>, Wallet<SigningKey>>>,
+pub struct GatewayContract<P>
+where
+    P: Middleware,
+{
+    provider: Arc<P>,
+    wallet:  Wallet<SigningKey>,
+    contract: Option<FuelERC20Gateway<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>>,
     address: H160,
     read_only: bool,
 }
 
-impl GatewayContract {
-    pub async fn new(config: &WatchtowerConfig) -> Result<Self> {
-        // setup provider
-        let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
-        let chain_id = provider.get_chainid().await?.as_u64();
+impl <P>GatewayContract<P>
+where
+    P: Middleware + 'static,
+{
+    pub fn new(
+        gateway_contract_address: String,
+        read_only: bool,
+        provider: Arc<P>,
+        wallet: Wallet<SigningKey>,
+    ) -> Result<Self> {
+        let address: H160 = Address::from_str(&gateway_contract_address)?;
 
-        // setup wallet
-        let mut read_only = false;
-        let key_str = match &config.ethereum_wallet_key {
-            Some(key) => key.clone(),
-            None => {
-                read_only = true;
-                String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-            }
-        };
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
+        Ok(GatewayContract {
+            provider,
+            wallet,
+            contract: None,
+            address,
+            read_only,
+        })
+    }
 
-        // setup contract
-        let address = Address::from_str(&config.gateway_contract_address)?;
-        let client = SignerMiddleware::new(provider.clone(), wallet);
-        let contract = FuelERC20Gateway::new(address, Arc::new(client));
+    pub async fn initialize(&mut self) -> Result<()> {
 
-        // verify contract setup is valid
-        let contract_result = contract.paused().call().await;
-        match contract_result {
+        // Create the contract instance
+        let client = SignerMiddleware::new(
+            self.provider.clone(),
+            self.wallet.clone(),
+        );
+
+        let contract = FuelERC20Gateway::new(
+            self.address, Arc::new(client),
+        );
+
+        // Try calling a read function to check if the contract is valid
+        match contract.paused().call().await {
             Err(_) => Err(anyhow::anyhow!("Invalid gateway contract.")),
-            Ok(_) => Ok(GatewayContract {
-                provider,
-                contract,
-                address,
-                read_only,
-            }),
+            Ok(_) => {
+                self.contract = Some(contract);
+                Ok(())
+            }
         }
     }
 
@@ -71,7 +82,8 @@ impl GatewayContract {
             Err(e) => return Err(anyhow::anyhow!("{e}")),
         };
 
-        //Deposit(bytes32 indexed sender, address indexed tokenId, bytes32 fuelTokenId, uint256 amount)
+        // Deposit(bytes32 indexed sender, address indexed tokenId, bytes32 fuelTokenId,
+        // uint256 amount)
         let token_topics = H256::from(token_address);
         let filter = Filter::new()
             .address(self.address)
@@ -112,7 +124,8 @@ impl GatewayContract {
             Err(e) => return Err(anyhow::anyhow!("{e}")),
         };
 
-        //Withdrawal(bytes32 indexed recipient, address indexed tokenId, bytes32 fuelTokenId, uint256 amount)
+        // Withdrawal(bytes32 indexed recipient, address indexed tokenId, bytes32 fuelTokenId,
+        // uint256 amount)
         let token_topics = H256::from(token_address);
         let filter = Filter::new()
             .address(self.address)
@@ -145,11 +158,16 @@ impl GatewayContract {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
 
-        // TODO: implement alert on timeout and a gas escalator (https://github.com/gakonst/ethers-rs/blob/master/examples/middleware/examples/gas_escalator.rs)
-        let result = self.contract.pause().call().await;
-        match result {
-            Err(e) => Err(anyhow::anyhow!("Failed to pause gateway contract: {}", e)),
-            Ok(_) => Ok(()),
+        match &self.contract {
+            Some(contract) => {
+                let result = contract.pause().call().await;
+                match result {
+                    Err(e) => Err(anyhow::anyhow!("Failed to pause gateway contract: {}", e)),
+                    Ok(_) => Ok(()),
+                }.expect("TODO: panic message");
+                Ok(())
+            }
+            None => Err(anyhow::anyhow!("Contract not initialized")),
         }
     }
 }

@@ -51,11 +51,26 @@ impl WatchtowerEthereumActions {
             }
         };
         let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
+
         let state_contract_address: String = config.state_contract_address.to_string();
+        let portal_contract_address: String = config.portal_contract_address.to_string();
+        let gateway_contract_address: String = config.gateway_contract_address.to_string();
 
         // Setup the contracts
         let mut state_contract = StateContract::new(
             state_contract_address,
+            read_only,
+            arc_provider.clone(),
+            wallet.clone(),
+        ).unwrap();
+        let mut portal_contract = PortalContract::new(
+            portal_contract_address,
+            read_only,
+            arc_provider.clone(),
+            wallet.clone(),
+        ).unwrap();
+        let mut gateway_contract = GatewayContract::new(
+            gateway_contract_address,
             read_only,
             arc_provider,
             wallet,
@@ -63,9 +78,8 @@ impl WatchtowerEthereumActions {
 
         // Initialize the contracts
         state_contract.initialize().await?;
-
-        let gateway_contract = GatewayContract::new(config).await?;
-        let portal_contract = PortalContract::new(config).await?;
+        portal_contract.initialize().await?;
+        gateway_contract.initialize().await?;
 
         // start handler thread for action function
         let (tx, mut rx) = mpsc::unbounded_channel::<ActionParams>();

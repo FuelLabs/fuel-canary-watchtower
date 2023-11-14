@@ -34,7 +34,7 @@ pub async fn start_fuel_watcher(
 
     let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
 
-    let fungible_token_contract = FungibleTokenContract::new(config).await?;
+    // let fungible_token_contract = FungibleTokenContract::new(config).await?;
     let watch_config = config.fuel_client_watcher.clone();
 
     // start thread
@@ -126,48 +126,48 @@ pub async fn start_fuel_watcher(
                     }
                 }
 
-                // check ERC20 token withdrawals
-                for gateway_withdraw_alert in &watch_config.gateway_withdraw_alerts {
-                    if gateway_withdraw_alert.alert_level != AlertLevel::None {
-                        match fungible_token_contract
-                            .get_amount_withdrawn(
-                                gateway_withdraw_alert.time_frame,
-                                &gateway_withdraw_alert.token_address,
-                            )
-                            .await
-                        {
-                            Ok(amount) => {
-                                let amount_threshold = FuelChain::get_value(
-                                    gateway_withdraw_alert.amount,
-                                    gateway_withdraw_alert.token_decimals,
-                                );
-                                if amount >= amount_threshold {
-                                    alerts.alert(
-                                        format!(
-                                            "ERC20 withdraw threshold of {}{} over {} seconds has been reached. Amount withdrawn: {}{}",
-                                            amount_threshold, gateway_withdraw_alert.token_name, gateway_withdraw_alert.time_frame, amount, gateway_withdraw_alert.token_name
-                                        ),
-                                        gateway_withdraw_alert.alert_level.clone(),
-                                    );
-                                    actions.action(
-                                        gateway_withdraw_alert.alert_action.clone(),
-                                        Some(gateway_withdraw_alert.alert_level.clone()),
-                                    );
-                                }
-                            }
-                            Err(e) => {
-                                alerts.alert(
-                                    format!("Failed to check ERC20 withdrawals: {e}"),
-                                    gateway_withdraw_alert.alert_level.clone(),
-                                );
-                                actions.action(
-                                    gateway_withdraw_alert.alert_action.clone(),
-                                    Some(gateway_withdraw_alert.alert_level.clone()),
-                                );
-                            }
-                        }
-                    }
-                }
+                // // check ERC20 token withdrawals
+                // for gateway_withdraw_alert in &watch_config.gateway_withdraw_alerts {
+                //     if gateway_withdraw_alert.alert_level != AlertLevel::None {
+                //         match fungible_token_contract
+                //             .get_amount_withdrawn(
+                //                 gateway_withdraw_alert.time_frame,
+                //                 &gateway_withdraw_alert.token_address,
+                //             )
+                //             .await
+                //         {
+                //             Ok(amount) => {
+                //                 let amount_threshold = FuelChain::get_value(
+                //                     gateway_withdraw_alert.amount,
+                //                     gateway_withdraw_alert.token_decimals,
+                //                 );
+                //                 if amount >= amount_threshold {
+                //                     alerts.alert(
+                //                         format!(
+                //                             "ERC20 withdraw threshold of {}{} over {} seconds has been reached. Amount withdrawn: {}{}",
+                //                             amount_threshold, gateway_withdraw_alert.token_name, gateway_withdraw_alert.time_frame, amount, gateway_withdraw_alert.token_name
+                //                         ),
+                //                         gateway_withdraw_alert.alert_level.clone(),
+                //                     );
+                //                     actions.action(
+                //                         gateway_withdraw_alert.alert_action.clone(),
+                //                         Some(gateway_withdraw_alert.alert_level.clone()),
+                //                     );
+                //                 }
+                //             }
+                //             Err(e) => {
+                //                 alerts.alert(
+                //                     format!("Failed to check ERC20 withdrawals: {e}"),
+                //                     gateway_withdraw_alert.alert_level.clone(),
+                //                 );
+                //                 actions.action(
+                //                     gateway_withdraw_alert.alert_action.clone(),
+                //                     Some(gateway_withdraw_alert.alert_level.clone()),
+                //                 );
+                //             }
+                //         }
+                //     }
+                // }
 
                 thread::sleep(POLL_DURATION);
             }

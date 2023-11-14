@@ -25,7 +25,9 @@ async fn main() {
     }
 
     // get the watchtower config
-    let config_result = fuel_canary_watchtower::load_config(config_file);
+    let config_result = fuel_canary_watchtower::load_config(
+        config_file,
+    );
     if config_result.is_err() {
         log::error!("Failed to load config: {}", config_result.err().unwrap());
     } else {

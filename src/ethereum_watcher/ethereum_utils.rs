@@ -9,7 +9,9 @@ use ethers::prelude::{GasEscalatorMiddleware, Signer, Wallet};
 use ethers::middleware::gas_escalator::{Frequency, GeometricGasPrice};
 use ethers::types::U256;
 
-pub async fn setup_ethereum_provider(ethereum_rpc: &str) -> Result<Arc<GasEscalatorMiddleware<Provider<Http>>>> {
+pub async fn setup_ethereum_provider(
+    ethereum_rpc: &str,
+) -> Result<Arc<GasEscalatorMiddleware<Provider<Http>>>> {
     // Geometrically increase gas price:
     // Start with `initial_price`, then increase it every 'every_secs' seconds by a fixed
     // coefficient. Coefficient defaults to 1.125 (12.5%), the minimum increase for Parity to
