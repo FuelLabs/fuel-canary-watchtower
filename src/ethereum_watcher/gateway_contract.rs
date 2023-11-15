@@ -111,47 +111,47 @@ where
         Ok(U256::zero())
     }
 
-    pub async fn get_amount_withdrawn(
-        &self,
-        timeframe: u32,
-        token_address: &str,
-        latest_block_num: u64,
-    ) -> Result<U256> {
-        let block_offset = timeframe as u64 / ETHEREUM_BLOCK_TIME;
-        let start_block = max(latest_block_num, block_offset) - block_offset;
-        let token_address = match token_address.parse::<H160>() {
-            Ok(addr) => addr,
-            Err(e) => return Err(anyhow::anyhow!("{e}")),
-        };
-
-        // Withdrawal(bytes32 indexed recipient, address indexed tokenId, bytes32 fuelTokenId,
-        // uint256 amount)
-        let token_topics = H256::from(token_address);
-        let filter = Filter::new()
-            .address(self.address)
-            .event("Withdrawal(bytes32,address,bytes32,uint256)")
-            .topic2(token_topics)
-            .from_block(start_block);
-        for i in 0..ETHEREUM_CONNECTION_RETRIES {
-            match self.provider.get_logs(&filter).await {
-                Ok(logs) => {
-                    let mut total = U256::zero();
-                    for log in logs {
-                        let amount = U256::from_big_endian(&log.data[32..64]);
-                        total += amount;
-                    }
-                    return Ok(total);
-                }
-                Err(e) => {
-                    if i == ETHEREUM_CONNECTION_RETRIES - 1 {
-                        return Err(anyhow::anyhow!("{e}"));
-                    }
-                }
-            }
-        }
-
-        Ok(U256::zero())
-    }
+    // pub async fn get_amount_withdrawn(
+    //     &self,
+    //     timeframe: u32,
+    //     token_address: &str,
+    //     latest_block_num: u64,
+    // ) -> Result<U256> {
+    //     let block_offset = timeframe as u64 / ETHEREUM_BLOCK_TIME;
+    //     let start_block = max(latest_block_num, block_offset) - block_offset;
+    //     let token_address = match token_address.parse::<H160>() {
+    //         Ok(addr) => addr,
+    //         Err(e) => return Err(anyhow::anyhow!("{e}")),
+    //     };
+    //
+    //     // Withdrawal(bytes32 indexed recipient, address indexed tokenId, bytes32 fuelTokenId,
+    //     // uint256 amount)
+    //     let token_topics = H256::from(token_address);
+    //     let filter = Filter::new()
+    //         .address(self.address)
+    //         .event("Withdrawal(bytes32,address,bytes32,uint256)")
+    //         .topic2(token_topics)
+    //         .from_block(start_block);
+    //     for i in 0..ETHEREUM_CONNECTION_RETRIES {
+    //         match self.provider.get_logs(&filter).await {
+    //             Ok(logs) => {
+    //                 let mut total = U256::zero();
+    //                 for log in logs {
+    //                     let amount = U256::from_big_endian(&log.data[32..64]);
+    //                     total += amount;
+    //                 }
+    //                 return Ok(total);
+    //             }
+    //             Err(e) => {
+    //                 if i == ETHEREUM_CONNECTION_RETRIES - 1 {
+    //                     return Err(anyhow::anyhow!("{e}"));
+    //                 }
+    //             }
+    //         }
+    //     }
+    //
+    //     Ok(U256::zero())
+    // }
 
     pub async fn pause(&self) -> Result<()> {
         if self.read_only {

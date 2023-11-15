@@ -104,43 +104,43 @@ where
         Ok(U256::zero())
     }
 
-    pub async fn get_amount_withdrawn(
-        &self,
-        timeframe: u32,
-        latest_block_num: u64,
-    ) -> Result<U256> {
-
-        let block_offset = timeframe as u64 / ETHEREUM_BLOCK_TIME;
-        let start_block = max(latest_block_num, block_offset) - block_offset;
-
-        // MessageRelayed(bytes32 indexed messageId, bytes32 indexed sender, bytes32 indexed
-        // recipient, uint64 amount)
-        let filter = Filter::new()
-            .address(self.address)
-            .event("MessageRelayed(bytes32,bytes32,bytes32,uint64)")
-            .from_block(start_block);
-        for i in 0..ETHEREUM_CONNECTION_RETRIES {
-            match self.provider.get_logs(&filter).await {
-                Ok(logs) => {
-                    let mut total = U256::zero();
-                    for log in logs {
-                        let amount = U256::from_big_endian(
-                            &log.data[0..32]).mul(
-                            U256::from(1_000_000_000),
-                        );
-                        total += amount;
-                    }
-                    return Ok(total);
-                }
-                Err(e) => {
-                    if i == ETHEREUM_CONNECTION_RETRIES - 1 {
-                        return Err(anyhow::anyhow!("{e}"));
-                    }
-                }
-            }
-        }
-        Ok(U256::zero())
-    }
+    // pub async fn get_amount_withdrawn(
+    //     &self,
+    //     timeframe: u32,
+    //     latest_block_num: u64,
+    // ) -> Result<U256> {
+    //
+    //     let block_offset = timeframe as u64 / ETHEREUM_BLOCK_TIME;
+    //     let start_block = max(latest_block_num, block_offset) - block_offset;
+    //
+    //     // MessageRelayed(bytes32 indexed messageId, bytes32 indexed sender, bytes32 indexed
+    //     // recipient, uint64 amount)
+    //     let filter = Filter::new()
+    //         .address(self.address)
+    //         .event("MessageRelayed(bytes32,bytes32,bytes32,uint64)")
+    //         .from_block(start_block);
+    //     for i in 0..ETHEREUM_CONNECTION_RETRIES {
+    //         match self.provider.get_logs(&filter).await {
+    //             Ok(logs) => {
+    //                 let mut total = U256::zero();
+    //                 for log in logs {
+    //                     let amount = U256::from_big_endian(
+    //                         &log.data[0..32]).mul(
+    //                         U256::from(1_000_000_000),
+    //                     );
+    //                     total += amount;
+    //                 }
+    //                 return Ok(total);
+    //             }
+    //             Err(e) => {
+    //                 if i == ETHEREUM_CONNECTION_RETRIES - 1 {
+    //                     return Err(anyhow::anyhow!("{e}"));
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     Ok(U256::zero())
+    // }
 
     pub async fn pause(&self) -> Result<()> {
         if self.read_only {

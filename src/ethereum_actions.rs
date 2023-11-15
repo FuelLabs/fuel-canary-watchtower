@@ -12,6 +12,9 @@ use ethers::providers::{Http, Middleware, Provider};
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use std::sync::Arc;
+use ethers::prelude::*;
+
+use crate::ethereum_watcher::ethereum_chain::EthereumChain;
 
 pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed.";
 
@@ -30,56 +33,12 @@ pub struct WatchtowerEthereumActions {
 }
 
 impl WatchtowerEthereumActions {
-    pub async fn new(config: &WatchtowerConfig, alerts: WatchtowerAlerts) -> Result<Self> {
-        // setup provider and check that it is valid
-        let provider = Provider::<Http>::try_from(&config.ethereum_rpc)?;
-        let chain_id = provider.get_chainid().await?.as_u64();
-        let arc_provider = Arc::new(provider);
-
-        let provider_result = arc_provider.get_chainid().await;
-        if let Err(_) = provider_result {
-            return Err(anyhow::anyhow!("Invalid ethereum RPC."));
-        }
-
-        // setup wallet
-        let mut read_only = false;
-        let key_str = match &config.ethereum_wallet_key {
-            Some(key) => key.clone(),
-            None => {
-                read_only = true;
-                String::from("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
-            }
-        };
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id);
-
-        let state_contract_address: String = config.state_contract_address.to_string();
-        let portal_contract_address: String = config.portal_contract_address.to_string();
-        let gateway_contract_address: String = config.gateway_contract_address.to_string();
-
-        // Setup the contracts
-        let mut state_contract = StateContract::new(
-            state_contract_address,
-            read_only,
-            arc_provider.clone(),
-            wallet.clone(),
-        ).unwrap();
-        let mut portal_contract = PortalContract::new(
-            portal_contract_address,
-            read_only,
-            arc_provider.clone(),
-            wallet.clone(),
-        ).unwrap();
-        let mut gateway_contract = GatewayContract::new(
-            gateway_contract_address,
-            read_only,
-            arc_provider,
-            wallet,
-        ).unwrap();
-
-        // Initialize the contracts
-        state_contract.initialize().await?;
-        portal_contract.initialize().await?;
-        gateway_contract.initialize().await?;
+    pub async fn new(
+        alerts: WatchtowerAlerts,
+        state_contract: StateContract<GasEscalatorMiddleware<Provider<Http>>>,
+        portal_contract: PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
+        gateway_contract: GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
+    ) -> Result<Self> {
 
         // start handler thread for action function
         let (tx, mut rx) = mpsc::unbounded_channel::<ActionParams>();

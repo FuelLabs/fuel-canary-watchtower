@@ -21,10 +21,8 @@ pub async fn start_fuel_watcher(
     config: &WatchtowerConfig,
     actions: WatchtowerEthereumActions,
     alerts: WatchtowerAlerts,
+    fuel_chain: FuelChain,
 ) -> Result<JoinHandle<()>> {
-
-    let fuel_provider = fuel_utils::setup_fuel_provider(&config.fuel_graphql).await?;
-    let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
 
     // let fungible_token_contract = FungibleTokenContract::new(config).await?;
     let watch_config = config.fuel_client_watcher.clone();

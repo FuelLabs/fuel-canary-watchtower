@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteTargetsManager">
+    <targets>
+      <target name="WSL - Ubuntu-22.04" type="wsl" uuid="1b28814e-2518-4644-b216-7f918031ed0c">
+        <config>
+          <option name="distributionMsId" value="Ubuntu-22.04" />
+          <option name="projectRootOnTarget" value="{exitCode=0, timeout=false, cancelled=false, stdout=/mnt/c/Program Files/JetBrains/RustRover 233.10527.39/jbr/bin&#10;, stderr=}/fuel-canary-watchtower" />
+        </config>
+        <ContributedStateBase type="RsLanguageRuntime">
+          <config>
+            <option name="cargoPath" value="/home/box/.cargo/bin/cargo" />
+            <option name="cargoVersion" value="1.75.0-nightly (65e297d1e 2023-11-03)" />
+            <option name="rustcPath" value="/home/box/.cargo/bin/rustc" />
+            <option name="rustcVersion" value="1.75.0-nightly (189d6c71f 2023-11-06)" />
+          </config>
+        </ContributedStateBase>
+      </target>
+    </targets>
+  </component>
+</project>
