@@ -1,20 +1,13 @@
 use crate::alerts::{AlertLevel, WatchtowerAlerts};
-use crate::config::WatchtowerConfig;
 use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
 use crate::ethereum_watcher::portal_contract::PortalContract;
 
-use ethers::signers::{Signer, Wallet};
-use ethers::prelude::k256::ecdsa::SigningKey;
-
 use anyhow::Result;
-use ethers::providers::{Http, Middleware, Provider};
+use ethers::providers::{Http, Provider};
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, UnboundedSender};
-use std::sync::Arc;
 use ethers::prelude::*;
-
-use crate::ethereum_watcher::ethereum_chain::EthereumChain;
 
 pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed.";
 

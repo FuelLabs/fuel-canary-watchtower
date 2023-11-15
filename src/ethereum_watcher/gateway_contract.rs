@@ -5,7 +5,7 @@ use ethers::abi::Address;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::{abigen, SignerMiddleware};
 use ethers::providers::{Middleware};
-use ethers::signers::{Signer, Wallet};
+use ethers::signers::{Wallet};
 use ethers::types::{Filter, H160, H256, U256};
 use std::cmp::max;
 
