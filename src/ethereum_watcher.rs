@@ -226,7 +226,10 @@ async fn check_base_asset_deposits(
             time_frame,
             *last_commit_check_block,
         ).await {
-            Ok(amt) => amt,
+            Ok(amt) => {
+                println!("Total ETH deposited: {:?}", amt);
+                amt
+            },
             Err(e) => {
                 alerts.alert(
                     format!("Failed to check base asset deposits: {}", e),
@@ -284,7 +287,7 @@ async fn check_erc20_token_deposits(
             .await
         {
             Ok(amt) => {
-                println!("Total Tokens deposited: {:?}", amt); // Log the total tokens deposited
+                println!("Total Tokens deposited: {:?}", amt);
                 amt
             },
             Err(e) => {

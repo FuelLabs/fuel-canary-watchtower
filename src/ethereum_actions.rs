@@ -1,3 +1,4 @@
+use std::future::Future;
 use crate::alerts::{AlertLevel, WatchtowerAlerts};
 use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
@@ -33,92 +34,66 @@ impl WatchtowerEthereumActions {
         gateway_contract: GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
     ) -> Result<Self> {
 
-        // start handler thread for action function
         let (tx, mut rx) = mpsc::unbounded_channel::<ActionParams>();
         tokio::spawn(async move {
-            loop {
-                let received_result = rx.recv().await;
-                match received_result {
-                    Some(params) => {
-                        match params.action {
-                            EthereumAction::PauseState => {
-                                alerts.alert(String::from("Pausing state contract."), AlertLevel::Info);
-                                match state_contract.pause().await {
-                                    Err(e) => alerts.alert(e.to_string(), params.alert_level),
-                                    Ok(_) => {
-                                        alerts.alert(
-                                            String::from("Successfully paused state contract."),
-                                            AlertLevel::Info,
-                                        );
-                                    }
-                                }
-                            }
-                            EthereumAction::PauseGateway => {
-                                alerts.alert(String::from("Pausing gateway contract."), AlertLevel::Info);
-                                match gateway_contract.pause().await {
-                                    Err(e) => alerts.alert(e.to_string(), params.alert_level),
-                                    Ok(_) => {
-                                        alerts.alert(
-                                            String::from("Successfully paused gateway contract."),
-                                            AlertLevel::Info,
-                                        );
-                                    }
-                                }
-                            }
-                            EthereumAction::PausePortal => {
-                                alerts.alert(String::from("Pausing portal contract."), AlertLevel::Info);
-                                match portal_contract.pause().await {
-                                    Err(e) => alerts.alert(e.to_string(), params.alert_level),
-                                    Ok(_) => {
-                                        alerts.alert(
-                                            String::from("Successfully paused portal contract."),
-                                            AlertLevel::Info,
-                                        );
-                                    }
-                                }
-                            }
-                            EthereumAction::PauseAll => {
-                                alerts.alert(String::from("Pausing all contracts."), AlertLevel::Info);
-                                match state_contract.pause().await {
-                                    Err(e) => alerts.alert(e.to_string(), params.alert_level.clone()),
-                                    Ok(_) => {
-                                        alerts.alert(
-                                            String::from("Successfully paused state contract."),
-                                            AlertLevel::Info,
-                                        );
-                                    }
-                                };
-                                match gateway_contract.pause().await {
-                                    Err(e) => alerts.alert(e.to_string(), params.alert_level.clone()),
-                                    Ok(_) => {
-                                        alerts.alert(
-                                            String::from("Successfully paused gateway contract."),
-                                            AlertLevel::Info,
-                                        );
-                                    }
-                                };
-                                match portal_contract.pause().await {
-                                    Err(e) => alerts.alert(e.to_string(), params.alert_level.clone()),
-                                    Ok(_) => {
-                                        alerts.alert(
-                                            String::from("Successfully paused portal contract."),
-                                            AlertLevel::Info,
-                                        );
-                                    }
-                                };
-                            }
-                            EthereumAction::None => {}
-                        };
-                    }
-                    None => {
-                        alerts.alert(String::from(THREAD_CONNECTIONS_ERR), AlertLevel::Error);
-                        panic!("{}", THREAD_CONNECTIONS_ERR);
-                    }
-                }
+            while let Some(params) = rx.recv().await {
+                Self::handle_action(
+                    params.action,
+                    &state_contract.clone(),
+                    &portal_contract.clone(),
+                    &gateway_contract.clone(),
+                    &alerts.clone(),
+                    params.alert_level,
+                ).await;
             }
+            alerts.alert(String::from(THREAD_CONNECTIONS_ERR), AlertLevel::Error);
+            panic!("{}", THREAD_CONNECTIONS_ERR);
         });
 
         Ok(WatchtowerEthereumActions { action_sender: tx })
+    }
+
+    async fn pause_contract<F>(
+        contract_name: &str,
+        pause_future: F,
+        alerts: &WatchtowerAlerts,
+        alert_level: AlertLevel,
+    )
+        where
+            F: Future<Output = Result<(), anyhow::Error>> + Send,
+    {
+        alerts.alert(format!("Pausing {} contract.", contract_name), AlertLevel::Info);
+        match pause_future.await {
+            Err(e) => alerts.alert(e.to_string(), alert_level),
+            Ok(_) => alerts.alert(format!("Successfully paused {} contract.", contract_name), AlertLevel::Info),
+        }
+    }
+
+    async fn handle_action(
+        action: EthereumAction,
+        state_contract: &StateContract<GasEscalatorMiddleware<Provider<Http>>>,
+        portal_contract: &PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
+        gateway_contract: &GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
+        alerts: &WatchtowerAlerts,
+        alert_level: AlertLevel,
+    ) {
+        match action {
+            EthereumAction::PauseState => {
+                Self::pause_contract("state", state_contract.pause(), alerts, alert_level).await;
+            },
+            EthereumAction::PauseGateway => {
+                Self::pause_contract("gateway", gateway_contract.pause(), alerts, alert_level).await;
+            },
+            EthereumAction::PausePortal => {
+                Self::pause_contract("portal", portal_contract.pause(), alerts, alert_level).await;
+            },
+            EthereumAction::PauseAll => {
+                Self::pause_contract("state", state_contract.pause(), alerts, alert_level.clone()).await;
+                Self::pause_contract("gateway", gateway_contract.pause(), alerts, alert_level.clone()).await;
+                Self::pause_contract("portal", portal_contract.pause(), alerts, alert_level).await;
+            },
+            EthereumAction::None => {},
+        }
     }
 
     pub fn action(&self, action: EthereumAction, alert_level: Option<AlertLevel>) {

@@ -93,7 +93,10 @@ async fn check_fuel_base_asset_withdrawals(
 
         let time_frame = portal_withdraw_alert.time_frame;
         let amount = match fuel_chain.get_base_amount_withdrawn(time_frame).await {
-            Ok(amt) => amt,
+            Ok(amt) => {
+                println!("Total ETH Withdrawn: {:?}", amt);
+                amt
+            },
             Err(e) => {
                 alerts.alert(
                     format!("Failed to check base asset withdrawals: {}", e),
@@ -142,7 +145,10 @@ async fn check_fuel_token_withdrawals(
             )
             .await
         {
-            Ok(amt) => amt,
+            Ok(amt) => {
+                println!("Total ERC20 Withdrawn: {:?}", amt);
+                amt
+            },
             Err(e) => {
                 alerts.alert(
                     format!("Failed to check ERC20 withdrawals: {}", e),
