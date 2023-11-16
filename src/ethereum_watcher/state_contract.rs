@@ -1,4 +1,4 @@
-use super::ETHEREUM_CONNECTION_RETRIES;
+use super::{ETHEREUM_CONNECTION_RETRIES, ethereum_utils};
 
 
 use anyhow::Result;
@@ -78,36 +78,15 @@ where
             .from_block(from_block);
 
         for i in 0..ETHEREUM_CONNECTION_RETRIES {
-            match self.provider.get_logs(&filter).await {
-                Ok(logs) => {
-        
-                    // Create a Vec to store the extracted event data
-                    let mut extracted_data: Vec<Bytes32> = Vec::new();
+            let logs = match self.provider.get_logs(&filter).await {
+                Ok(logs) => logs,
+                Err(e) if i == ETHEREUM_CONNECTION_RETRIES - 1 => return Err(anyhow::anyhow!("{e}")),
+                _ => continue,
+            };
 
-                    // Iterate over the logs and extract event data
-                    for log in &logs {
-                        // Extract the non-indexed event parameter (blockHash) from the data field
-                        let mut bytes32_data: [u8; 32] = [0; 32];
-                        
-                        if log.data.len() == 32 {
-                            bytes32_data.copy_from_slice(&log.data);
-                        } else {
-                            return Err(anyhow::anyhow!("Length of log.data does not match that of 32"));
-                        }
-
-                        // Add the extracted event data to the result vector
-                        extracted_data.push( Bytes32::new(bytes32_data));
-                    }
-        
-                    return Ok(extracted_data);
-                }
-                Err(e) => {
-                    if i == ETHEREUM_CONNECTION_RETRIES - 1 {
-                        return Err(anyhow::anyhow!("{e}"));
-                    }
-                }
-            }
+            return ethereum_utils::process_logs(logs);
         }
+
         Ok(vec![])
     }
 
@@ -122,8 +101,7 @@ where
                 match result {
                     Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
                     Ok(_) => Ok(()),
-                }.expect("TODO: panic message");
-                Ok(())
+                }
             }
             None => Err(anyhow::anyhow!("Contract not initialized")),
         }

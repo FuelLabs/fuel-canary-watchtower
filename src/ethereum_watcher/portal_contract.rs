@@ -153,8 +153,7 @@ where
                 match result {
                     Err(e) => Err(anyhow::anyhow!("Failed to pause portal contract: {}", e)),
                     Ok(_) => Ok(()),
-                }.expect("TODO: panic message");
-                Ok(())
+                }
             }
             None => Err(anyhow::anyhow!("Contract not initialized")),
         }

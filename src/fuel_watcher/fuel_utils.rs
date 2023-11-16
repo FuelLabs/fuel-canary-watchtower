@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use anyhow::{Result, anyhow};
-use fuels::prelude::{Provider};
+use fuels::prelude::Provider;
 
 pub async fn setup_fuel_provider(fuels_graphql: &str) -> Result<Arc<Provider>> {
     let provider = Provider::connect(&fuels_graphql).await?;

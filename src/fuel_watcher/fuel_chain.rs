@@ -3,21 +3,35 @@ use super::{FUEL_BLOCK_TIME, FUEL_CONNECTION_RETRIES};
 use anyhow::Result;
 use fuels::{
     client::{PageDirection, PaginationRequest},
+    types::{Identity, Bits256},
+    core::{
+        codec::ABIDecoder,
+        traits::{Parameterize, Tokenizable},
+    },
+    macros::{Parameterize, Tokenizable},
     tx::Bytes32,
 };
 use fuels::prelude::{Provider, TransactionType};
+use fuels::types::chain_info::ChainInfo;
 use fuels::types::tx_status::TxStatus;
+use fuels::tx::Receipt;
 
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use fuels::tx::Receipt;
-use fuels::types::chain_info::ChainInfo;
+
 
 // TODO: we need create an interface for the provider, so we can create a mockprovider
 // this will allow us to test functions.
 #[derive(Clone, Debug)]
 pub struct FuelChain {
     provider: Arc<Provider>,
+}
+
+#[derive(Parameterize, Tokenizable, Debug)]
+pub struct WithdrawalEvent {
+    amount: u64,
+    from: Identity,
+    to: Bits256,
 }
 
 impl FuelChain {
@@ -139,7 +153,7 @@ impl FuelChain {
         // Fetch the receipts from the transaction.
         let receipts = self.provider.tx_status(tx_id).await?.take_receipts();
         for receipt in receipts{
-            if let Receipt::MessageOut { amount, .. } = receipt {
+            if let Receipt::MessageOut { amount, .. } = receipt.clone() {
                 total_amount += amount;
             }
         }
@@ -225,12 +239,22 @@ impl FuelChain {
         }
 
         // Fetch the receipts from the transaction.
+        let mut burn_found: bool = false;
         let receipts = self.provider.tx_status(tx_id).await?.take_receipts();
         for receipt in receipts{
-            if let Receipt::Burn { contract_id, val, .. } = receipt {
-                if contract_id.to_string() == token_contract_id {
-                    total_amount += val;
+            match receipt {
+                Receipt::Burn { contract_id, .. } if contract_id.to_string() == token_contract_id => {
+                    burn_found = true;
                 }
+                Receipt::LogData { data: Some(data), .. } if burn_found => {
+                    let token = ABIDecoder::default().decode(
+                        &WithdrawalEvent::param_type(),
+                         &data,
+                        )?;
+                    let withdrawal_event: WithdrawalEvent = WithdrawalEvent::from_token(token)?;
+                    total_amount += withdrawal_event.amount;
+                }
+                _ => {}
             }
         }
 

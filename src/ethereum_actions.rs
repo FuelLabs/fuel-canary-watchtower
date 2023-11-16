@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::time::Duration;
 use crate::alerts::{AlertLevel, WatchtowerAlerts};
 use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
@@ -9,6 +10,7 @@ use ethers::providers::{Http, Provider};
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use ethers::prelude::*;
+use tokio::time::timeout;
 
 pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed.";
 
@@ -63,9 +65,22 @@ impl WatchtowerEthereumActions {
             F: Future<Output = Result<(), anyhow::Error>> + Send,
     {
         alerts.alert(format!("Pausing {} contract.", contract_name), AlertLevel::Info);
-        match pause_future.await {
-            Err(e) => alerts.alert(e.to_string(), alert_level),
-            Ok(_) => alerts.alert(format!("Successfully paused {} contract.", contract_name), AlertLevel::Info),
+    
+        // Set a duration for the timeout
+        let timeout_duration = Duration::from_secs(30);
+    
+        match timeout(timeout_duration, pause_future).await {
+            Ok(Ok(_)) => {
+                alerts.alert(format!("Successfully paused {} contract.", contract_name), AlertLevel::Info);
+            },
+            Ok(Err(e)) => {
+                // This is the case where pause_future completed, but resulted in an error.
+                alerts.alert(e.to_string(), alert_level);
+            },
+            Err(_) => {
+                // This is the timeout case
+                alerts.alert(format!("Timeout while pausing {} contract.", contract_name), alert_level);
+            }
         }
     }
 
