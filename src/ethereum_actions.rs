@@ -28,6 +28,12 @@ pub struct WatchtowerEthereumActions {
     action_sender: UnboundedSender<ActionParams>,
 }
 
+#[derive(Clone, Debug)]
+struct ActionParams {
+    action: EthereumAction,
+    alert_level: AlertLevel,
+}
+
 impl WatchtowerEthereumActions {
     pub async fn new(
         alerts: WatchtowerAlerts,
@@ -119,10 +125,4 @@ impl WatchtowerEthereumActions {
         let params = ActionParams { action, alert_level };
         self.action_sender.send(params).unwrap();
     }
-}
-
-#[derive(Clone, Debug)]
-struct ActionParams {
-    action: EthereumAction,
-    alert_level: AlertLevel,
 }

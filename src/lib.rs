@@ -1,7 +1,7 @@
 mod alerts;
 mod config;
 mod ethereum_actions;
-mod ethereum_watcher;
+pub(crate) mod ethereum_watcher;
 mod fuel_watcher;
 
 pub use config::{load_config, WatchtowerConfig};

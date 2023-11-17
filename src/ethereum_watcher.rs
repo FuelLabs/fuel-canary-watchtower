@@ -222,7 +222,7 @@ async fn check_base_asset_deposits(
         }
 
         let time_frame = portal_deposit_alert.time_frame;
-        let amount = match portal_contract.get_amount_deposited(
+        let amount = match portal_contract.get_base_amount_deposited(
             time_frame,
             *last_commit_check_block,
         ).await {
@@ -279,7 +279,7 @@ async fn check_erc20_token_deposits(
 
         let latest_block = last_commit_check_block;
         let amount = match gateway_contract
-            .get_amount_deposited(
+            .get_token_amount_deposited(
                 gateway_deposit_alert.time_frame,
                 &gateway_deposit_alert.token_address,
                 latest_block,

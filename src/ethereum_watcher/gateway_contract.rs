@@ -69,7 +69,7 @@ where
         }
     }
 
-    pub async fn get_amount_deposited(
+    pub async fn get_token_amount_deposited(
         &self,
         timeframe: u32,
         token_address: &str,

@@ -70,7 +70,7 @@ where
         }
     }
 
-    pub async fn get_amount_deposited(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>{
+    pub async fn get_base_amount_deposited(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>{
         let block_offset = timeframe as u64 / ETHEREUM_BLOCK_TIME;
         let start_block = max(latest_block_num, block_offset) - block_offset;
 
