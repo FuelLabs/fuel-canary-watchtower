@@ -24,6 +24,12 @@ pub struct WatchtowerAlerts {
     alert_sender: UnboundedSender<AlertParams>,
 }
 
+#[derive(Clone, Debug)]
+struct AlertParams {
+    text: String,
+    level: AlertLevel,
+}
+
 // TODO: buffer message alerts to avoid duplicates
 
 impl WatchtowerAlerts {
@@ -41,9 +47,7 @@ impl WatchtowerAlerts {
                     Ok(params) => {
                         match params.level {
                             AlertLevel::None => {}
-                            AlertLevel::Info => {
-                                log::info!("{}", params.text);
-                            }
+                            AlertLevel::Info => log::info!("{}", params.text),
                             AlertLevel::Warn => {
                                 log::warn!("{}", params.text);
                                 let min_time_elapsed = match SystemTime::now().duration_since(start) {
@@ -91,10 +95,4 @@ impl WatchtowerAlerts {
         let params = AlertParams { text, level };
         self.alert_sender.send(params).unwrap();
     }
-}
-
-#[derive(Clone, Debug)]
-struct AlertParams {
-    text: String,
-    level: AlertLevel,
 }

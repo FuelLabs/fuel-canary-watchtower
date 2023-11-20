@@ -1,4 +1,4 @@
-use super::ETHEREUM_CONNECTION_RETRIES;
+use super::{ETHEREUM_CONNECTION_RETRIES, ethereum_utils};
 
 
 use anyhow::Result;
@@ -6,7 +6,7 @@ use ethers::abi::Address;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::{abigen, SignerMiddleware};
 use ethers::providers::{Middleware};
-use ethers::signers::{Signer, Wallet};
+use ethers::signers::{Wallet};
 use ethers::types::{Filter, H160};
 use fuels::tx::Bytes32;
 
@@ -27,7 +27,7 @@ where
     read_only: bool,
 }
 
-impl<P> StateContract<P>
+impl <P>StateContract<P>
 where
     P: Middleware + 'static,
 {   
@@ -55,7 +55,10 @@ where
             self.provider.clone(),
              self.wallet.clone(),
             );
-        let contract = FuelChainState::new(self.address, Arc::new(client));
+
+        let contract = FuelChainState::new(
+            self.address, Arc::new(client),
+        );
 
         // Try calling a read function to check if the contract is valid
         match contract.paused().call().await {
@@ -75,36 +78,15 @@ where
             .from_block(from_block);
 
         for i in 0..ETHEREUM_CONNECTION_RETRIES {
-            match self.provider.get_logs(&filter).await {
-                Ok(logs) => {
-        
-                    // Create a Vec to store the extracted event data
-                    let mut extracted_data: Vec<Bytes32> = Vec::new();
+            let logs = match self.provider.get_logs(&filter).await {
+                Ok(logs) => logs,
+                Err(e) if i == ETHEREUM_CONNECTION_RETRIES - 1 => return Err(anyhow::anyhow!("{e}")),
+                _ => continue,
+            };
 
-                    // Iterate over the logs and extract event data
-                    for log in &logs {
-                        // Extract the non-indexed event parameter (blockHash) from the data field
-                        let mut bytes32_data: [u8; 32] = [0; 32];
-                        
-                        if log.data.len() == 32 {
-                            bytes32_data.copy_from_slice(&log.data);
-                        } else {
-                            return Err(anyhow::anyhow!("Length of log.data does not match that of 32"));
-                        }
-
-                        // Add the extracted event data to the result vector
-                        extracted_data.push( Bytes32::new(bytes32_data));
-                    }
-        
-                    return Ok(extracted_data);
-                }
-                Err(e) => {
-                    if i == ETHEREUM_CONNECTION_RETRIES - 1 {
-                        return Err(anyhow::anyhow!("{e}"));
-                    }
-                }
-            }
+            return ethereum_utils::process_logs(logs);
         }
+
         Ok(vec![])
     }
 
@@ -112,15 +94,14 @@ where
         if self.read_only {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
-        
+
         match &self.contract {
             Some(contract) => {
                 let result = contract.pause().call().await;
                 match result {
                     Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
                     Ok(_) => Ok(()),
-                }.expect("TODO: panic message");
-                Ok(())
+                }
             }
             None => Err(anyhow::anyhow!("Contract not initialized")),
         }
@@ -133,105 +114,12 @@ mod tests {
     use ethers::prelude::*;
     use ethers::providers::Provider;
     use fuels::accounts::fuel_crypto::coins_bip32::ecdsa::SigningKey;
-    use crate::WatchtowerConfig;
-    use crate::config::*;
     use std::sync::Arc;
 
     use super::StateContract;
 
-    // A helper function to create a mock `WatchtowerConfig`.
-    fn mock_watchtower_config() -> WatchtowerConfig {
-        WatchtowerConfig {
-            ethereum_rpc: "http://127.0.0.1".to_string(),
-            ethereum_wallet_key: Some("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string()),
-            fuel_graphql: "https://beta-4.fuel.network/graphql".to_string(),
-            portal_contract_address: "0x03f2901Db5723639978deBed3aBA66d4EA03aF73".to_string(),
-            gateway_contract_address:  "0x07cf0FF4fdD5d73C4ea5E96bb2cFaa324A348269".to_string(),
-            state_contract_address: "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string(),
-            fuel_withdrawal_script: "0x543".to_string(),
-            duplicate_alert_delay: 900,
-            fuel_client_watcher: FuelClientWatcher {
-                connection_alert: GenericAlert {
-                    alert_level: default_alert_level(),
-                    alert_action: default_alert_action(),
-                },
-                block_production_alert: BlockProductionAlert {
-                    alert_level: default_alert_level(),
-                    alert_action: default_alert_action(),
-                    max_block_time: default_max_block_time(),
-                },
-                portal_withdraw_alerts: vec![
-                    WithdrawAlert {
-                        alert_level: default_alert_level(),
-                        alert_action: default_alert_action(),
-                        token_name: default_token_name(),
-                        token_decimals: default_token_decimals_fuel(),
-                        token_address: default_token_address(),
-                        time_frame: default_time_frame(),
-                        amount: default_amount(),
-                    },
-                    // ... more mock WithdrawAlerts if necessary
-                ],
-                gateway_withdraw_alerts: vec![
-                    WithdrawAlert {
-                        alert_level: default_alert_level(),
-                        alert_action: default_alert_action(),
-                        token_name: default_token_name(),
-                        token_decimals: default_token_decimals_fuel(),
-                        token_address: default_token_address(),
-                        time_frame: default_time_frame(),
-                        amount: default_amount(),
-                    },
-                ],
-            },
-            ethereum_client_watcher: EthereumClientWatcher {
-                connection_alert: GenericAlert {
-                    alert_level: default_alert_level(),
-                    alert_action: default_alert_action(),
-                },
-                block_production_alert: BlockProductionAlert {
-                    alert_level: default_alert_level(),
-                    alert_action: default_alert_action(),
-                    max_block_time: default_max_block_time(),
-                },
-                account_funds_alert: AccountFundsAlert {
-                    alert_level: default_alert_level(),
-                    alert_action: default_alert_action(),
-                    min_balance: default_minimum_balance(),
-                },
-                invalid_state_commit_alert: GenericAlert {
-                    alert_level: default_alert_level(),
-                    alert_action: default_alert_action(),
-                },
-                portal_deposit_alerts: vec![
-                    DepositAlert {
-                        alert_level: default_alert_level(),
-                        alert_action: default_alert_action(),
-                        token_name: default_token_name(),
-                        token_decimals: default_token_decimals_ethereum(),
-                        token_address: default_token_address(),
-                        time_frame: default_time_frame(),
-                        amount: default_amount(),
-                    },
-                ],
-                gateway_deposit_alerts: vec![
-                    DepositAlert {
-                        alert_level: default_alert_level(),
-                        alert_action: default_alert_action(),
-                        token_name: default_token_name(),
-                        token_decimals: default_token_decimals_ethereum(),
-                        token_address: default_token_address(),
-                        time_frame: default_time_frame(),
-                        amount: default_amount(),
-                    },
-                ],
-            },
-        }
-    }
-
-    async fn setup_state_contract() -> Result<(StateContract<Provider<MockProvider>>, WatchtowerConfig, MockProvider), Box<dyn std::error::Error>> {
+    async fn setup_state_contract() -> Result<(StateContract<Provider<MockProvider>>, MockProvider), Box<dyn std::error::Error>> {
         let (provider, mock) = Provider::mocked();
-        let config: WatchtowerConfig = mock_watchtower_config();
         let arc_provider = Arc::new(provider);
 
         // contract.paused().call() response
@@ -255,14 +143,41 @@ mod tests {
             wallet,
         )?;
 
-        Ok((state_contract, config, mock))
+        Ok((state_contract, mock))
+    }
+
+    #[tokio::test]
+    async fn new_state_contract_test() {
+        let (
+            state_contract,
+            _mock,
+        ) = setup_state_contract().await.expect("Setup failed");
+        assert_eq!(state_contract.read_only, false);
+        assert_eq!(state_contract.address, "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap());
+    }
+
+    #[tokio::test]
+    async fn initialize_state_contract_test() {
+        let (
+            mut state_contract,
+              mock,
+        ) = setup_state_contract().await.expect("Setup failed");
+
+        // Mock a successful response for the `paused` call
+        let paused_response_hex: String = format!("0x{}", "00".repeat(32));
+        mock.push_response(
+            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
+        );
+
+        let result = state_contract.initialize().await;
+        assert!(result.is_ok());
+        assert!(state_contract.contract.is_some());
     }
 
     #[tokio::test]
     async fn get_latest_commits_test() {
         let (
             state_contract,
-            _config,
             mock,
         ) = setup_state_contract().await.expect("Setup failed");
 
@@ -290,5 +205,26 @@ mod tests {
         let block_num: u64 = 42;
         let commits = state_contract.get_latest_commits(block_num).await.unwrap();
         assert_eq!(&commits[0].as_slice(), &bytes32_data.as_slice());
+    }
+
+    #[tokio::test]
+    async fn pause_state_contract_test() {
+        let (
+            mut state_contract,
+              mock,
+        ) = setup_state_contract().await.expect("Setup failed");
+
+        // Test pause before initialization
+        assert!(state_contract.pause().await.is_err());
+
+        // Initialize and test pause after initialization
+        state_contract.initialize().await.expect("Initialization failed");
+
+        // Mock a successful response for the `pause` call
+        let pause_response_hex: String = format!("0x{}", "01".repeat(32));
+        mock.push_response(MockResponse::Value(serde_json::Value::String(pause_response_hex)));
+
+        // Test pause with the contract initialized
+        assert!(state_contract.pause().await.is_ok());
     }
 }

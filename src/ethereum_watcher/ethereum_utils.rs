@@ -5,11 +5,14 @@ use anyhow::{Result, anyhow};
 use std::convert::TryFrom;
 use std::ops::Mul;
 use ethers::abi::AbiEncode;
-use ethers::prelude::{GasEscalatorMiddleware, Signer, Wallet};
+use fuels::tx::Bytes32;
+use ethers::prelude::{GasEscalatorMiddleware, Signer, Wallet, Log};
 use ethers::middleware::gas_escalator::{Frequency, GeometricGasPrice};
 use ethers::types::U256;
 
-pub async fn setup_ethereum_provider(ethereum_rpc: &str) -> Result<Arc<GasEscalatorMiddleware<Provider<Http>>>> {
+pub async fn setup_ethereum_provider(
+    ethereum_rpc: &str,
+) -> Result<Arc<GasEscalatorMiddleware<Provider<Http>>>> {
     // Geometrically increase gas price:
     // Start with `initial_price`, then increase it every 'every_secs' seconds by a fixed
     // coefficient. Coefficient defaults to 1.125 (12.5%), the minimum increase for Parity to
@@ -69,4 +72,18 @@ pub fn get_value(value_fp: f64, decimals: u8) -> U256 {
     let value = U256::from(value as u64);
 
     value.mul(10_u64.pow(decimals_p2 as u32))
+}
+
+pub fn process_logs(logs: Vec<Log>) -> Result<Vec<Bytes32>> {
+    let mut extracted_data = Vec::new();
+    for log in logs {
+        let mut bytes32_data: [u8; 32] = [0; 32];
+        if log.data.len() == 32 {
+            bytes32_data.copy_from_slice(&log.data);
+            extracted_data.push(Bytes32::new(bytes32_data));
+        } else {
+            return Err(anyhow!("Length of log.data does not match that of 32"));
+        }
+    }
+    Ok(extracted_data)
 }
