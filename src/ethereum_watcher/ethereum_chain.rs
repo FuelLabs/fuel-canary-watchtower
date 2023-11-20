@@ -93,3 +93,75 @@ where
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ethers::providers::{MockProvider, Provider, MockResponse};
+    use ethers::types::{Block, U64};
+
+
+    async fn setup_mock_provider() -> (MockProvider, EthereumChain<Provider<MockProvider>>) {
+        let mock = MockProvider::new();
+        let provider = Provider::new(mock.clone());
+        let arc_provider = Arc::new(provider);
+        let chain = EthereumChain::new(arc_provider.clone()).await;
+
+        assert!(chain.is_ok());
+
+        (mock, chain.unwrap())
+    }
+
+    #[tokio::test]
+    async fn test_check_connection() {
+        let (mock, chain) = setup_mock_provider().await;
+
+        // Mock the response for get_chainid call
+        let chain_id_response = MockResponse::Value(serde_json::json!(U64::from(1337)));
+        mock.push_response(chain_id_response);
+
+        assert!(chain.check_connection().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_seconds_since_last_block() {
+        let (mock, chain) = setup_mock_provider().await;
+        let latest_block_number = U64::from(100);
+        let past_timestamp = U256::from(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 10);
+        
+        mock.push_response(MockResponse::Value(serde_json::to_value(&Block::<()> {
+            number: Some(latest_block_number),
+            timestamp: past_timestamp,
+            ..Default::default()
+        }).unwrap()));
+
+        mock.push_response(MockResponse::Value(serde_json::json!(latest_block_number)));
+
+        let seconds_since_last_block = chain.get_seconds_since_last_block().await;
+        assert!(seconds_since_last_block.is_ok());
+        assert_eq!(seconds_since_last_block.unwrap(), 10);
+    }
+    
+    #[tokio::test]
+    async fn test_get_latest_block_number() {
+        let (mock, chain) = setup_mock_provider().await;
+        mock.push_response(MockResponse::Value(serde_json::json!(U64::from(100))));
+
+        let block_number = chain.get_latest_block_number().await;
+        assert!(block_number.is_ok());
+        assert_eq!(block_number.unwrap(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_balance() {
+        let (mock, chain) = setup_mock_provider().await;
+        let addr = "0x0000000000000000000000000000000000000000";
+        let balance = U256::from(1000);
+        
+        mock.push_response(MockResponse::Value(serde_json::to_value(&balance).unwrap()));
+
+        let result = chain.get_account_balance(addr).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), balance);
+    }
+}

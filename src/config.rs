@@ -1,7 +1,7 @@
 use crate::alerter::AlertLevel;
 use crate::ethereum_actions::EthereumAction;
 
-use anyhow::{Result, Context};
+use anyhow::Result;
 use serde::Deserialize;
 use std::{env, fs, time::Duration};
 
