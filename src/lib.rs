@@ -1,4 +1,4 @@
-mod alerts;
+mod alerter;
 mod config;
 mod ethereum_actions;
 pub(crate) mod ethereum_watcher;
@@ -6,7 +6,7 @@ mod fuel_watcher;
 
 pub use config::{load_config, WatchtowerConfig};
 
-use alerts::{AlertLevel, WatchtowerAlerts};
+use alerter::{AlertLevel, WatchtowerAlerter};
 use anyhow::Result;
 use ethers::middleware::Middleware;
 use ethereum_actions::WatchtowerEthereumActions;
@@ -104,22 +104,22 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     handle_watcher_threads(fuel_thread, ethereum_thread, &alerts).await
 }
 
-fn initialize_alerts(config: &WatchtowerConfig) -> Result<WatchtowerAlerts> {
-    WatchtowerAlerts::new(config)
+fn initialize_alerts(config: &WatchtowerConfig) -> Result<WatchtowerAlerter> {
+    WatchtowerAlerter::new(config)
         .map_err(|e| anyhow::anyhow!("Failed to setup alerts: {}", e))
 }
 
 async fn handle_watcher_threads(
     fuel_thread: JoinHandle<()>,
     ethereum_thread: JoinHandle<()>,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
 ) -> Result<()> {
 
     if let Err(e) = ethereum_thread.await {
         alerts.alert(
             String::from("Ethereum watcher thread failed."),
             AlertLevel::Error,
-        );
+        ).await;
         return Err(anyhow::anyhow!("Ethereum watcher thread failed: {}", e));
     }
 
@@ -127,7 +127,7 @@ async fn handle_watcher_threads(
         alerts.alert(
             String::from("Fuel watcher thread failed."),
             AlertLevel::Error,
-        );
+        ).await;
         return Err(anyhow::anyhow!("Fuel watcher thread failed: {}", e));
     }
 

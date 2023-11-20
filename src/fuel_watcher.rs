@@ -1,4 +1,4 @@
-use crate::alerts::{AlertLevel, WatchtowerAlerts};
+use crate::alerter::{AlertLevel, WatchtowerAlerter};
 use crate::ethereum_actions::WatchtowerEthereumActions;
 use crate::WatchtowerConfig;
 
@@ -20,7 +20,7 @@ pub static FUEL_BLOCK_TIME: u64 = 1;
 
 async fn check_fuel_chain_connection(
     fuel_chain: &FuelChain,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &FuelClientWatcher,
 ) {
@@ -32,7 +32,7 @@ async fn check_fuel_chain_connection(
         alerts.alert(
             format!("Failed to check fuel connection: {}", e),
             watch_config.connection_alert.alert_level.clone(),
-        );
+        ).await;
         actions.action(
             watch_config.connection_alert.alert_action.clone(),
             Some(watch_config.connection_alert.alert_level.clone()),
@@ -42,7 +42,7 @@ async fn check_fuel_chain_connection(
 
 async fn check_fuel_block_production(
     fuel_chain: &FuelChain,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &FuelClientWatcher,
 ) {
@@ -56,7 +56,7 @@ async fn check_fuel_block_production(
             alerts.alert(
                 format!("Failed to check fuel block production: {}", e),
                 watch_config.block_production_alert.alert_level.clone(),
-            );
+            ).await;
             actions.action(
                 watch_config.block_production_alert.alert_action.clone(),
                 Some(watch_config.block_production_alert.alert_level.clone()),
@@ -72,7 +72,7 @@ async fn check_fuel_block_production(
                 watch_config.block_production_alert.max_block_time, seconds_since_last_block
             ),
             watch_config.block_production_alert.alert_level.clone(),
-        );
+        ).await;
         actions.action(
             watch_config.block_production_alert.alert_action.clone(),
             Some(watch_config.block_production_alert.alert_level.clone()),
@@ -82,7 +82,7 @@ async fn check_fuel_block_production(
 
 async fn check_fuel_base_asset_withdrawals(
     fuel_chain: &FuelChain,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &FuelClientWatcher,
 ) {
@@ -101,7 +101,7 @@ async fn check_fuel_base_asset_withdrawals(
                 alerts.alert(
                     format!("Failed to check base asset withdrawals: {}", e),
                     portal_withdraw_alert.alert_level.clone(),
-                );
+                ).await;
                 actions.action(
                     portal_withdraw_alert.alert_action.clone(),
                     Some(portal_withdraw_alert.alert_level.clone()),
@@ -118,7 +118,7 @@ async fn check_fuel_base_asset_withdrawals(
                     amount_threshold, time_frame, amount
                 ),
                 portal_withdraw_alert.alert_level.clone(),
-            );
+            ).await;
             actions.action(
                 portal_withdraw_alert.alert_action.clone(),
                 Some(portal_withdraw_alert.alert_level.clone()),
@@ -129,7 +129,7 @@ async fn check_fuel_base_asset_withdrawals(
 
 async fn check_fuel_token_withdrawals(
     fuel_chain: &FuelChain,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &FuelClientWatcher,
 ) {
@@ -153,7 +153,7 @@ async fn check_fuel_token_withdrawals(
                 alerts.alert(
                     format!("Failed to check ERC20 withdrawals: {}", e),
                     gateway_withdraw_alert.alert_level.clone(),
-                );
+                ).await;
                 actions.action(
                     gateway_withdraw_alert.alert_action.clone(),
                     Some(gateway_withdraw_alert.alert_level.clone()),
@@ -175,7 +175,7 @@ async fn check_fuel_token_withdrawals(
                     gateway_withdraw_alert.time_frame, amount, gateway_withdraw_alert.token_name
                 ),
                 gateway_withdraw_alert.alert_level.clone(),
-            );
+            ).await;
             actions.action(
                 gateway_withdraw_alert.alert_action.clone(),
                 Some(gateway_withdraw_alert.alert_level.clone()),
@@ -187,7 +187,7 @@ async fn check_fuel_token_withdrawals(
 pub async fn start_fuel_watcher(
     config: &WatchtowerConfig,
     actions: WatchtowerEthereumActions,
-    alerts: WatchtowerAlerts,
+    alerts: WatchtowerAlerter,
     fuel_chain: FuelChain,
 ) -> Result<JoinHandle<()>> {
 
@@ -196,7 +196,7 @@ pub async fn start_fuel_watcher(
     let handle = tokio::spawn(async move {
         loop {
             // update the log every so often to notify that everything is working
-            alerts.alert(String::from("Watching fuel chain."), AlertLevel::Info);
+            alerts.alert(String::from("Watching fuel chain."), AlertLevel::Info).await;
             for _ in 0..POLL_LOGGING_SKIP {
 
                 check_fuel_chain_connection(&fuel_chain, &alerts, &actions, &watch_config).await;

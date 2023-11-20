@@ -5,6 +5,8 @@
   "portal_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   "gateway_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   "duplicate_alert_delay": 900,
+  "alert_cache_expiry": 300000,
+  "alert_cache_size": 100,
   "fuel_client_watcher": {
     "connection_alert": {
       "alert_level": "Warn"
