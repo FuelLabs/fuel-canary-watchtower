@@ -1,4 +1,5 @@
 use crate::WatchtowerConfig;
+use crate::PagerDutyClient;
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -27,6 +28,7 @@ pub struct WatchtowerAlerter {
     alert_sender: UnboundedSender<AlertParams>,
     alert_cache: Arc<Mutex<HashMap<String, Instant>>>,
     alert_cache_expiry: Duration,
+    pagerduty_client: PagerDutyClient,
 }
 
 #[derive(Clone, Debug)]
@@ -35,10 +37,8 @@ struct AlertParams {
     level: AlertLevel,
 }
 
-// TODO: buffer message alerts to avoid duplicates
-
 impl WatchtowerAlerter {
-    pub fn new(config: &WatchtowerConfig) -> Result<Self> {
+    pub fn new(config: &WatchtowerConfig, pagerduty_client: PagerDutyClient) -> Result<Self> {
         let start = SystemTime::now();
 
         let alert_cache = Arc::new(Mutex::new(HashMap::with_capacity(config.alert_cache_size)));
@@ -98,7 +98,7 @@ impl WatchtowerAlerter {
             }
         });
 
-        Ok(WatchtowerAlerter { alert_sender, alert_cache, alert_cache_expiry })
+        Ok(WatchtowerAlerter { alert_sender, alert_cache, alert_cache_expiry, pagerduty_client })
     }
 
     pub async fn alert(&self, text: String, level: AlertLevel) {
@@ -117,6 +117,15 @@ impl WatchtowerAlerter {
 
         // Update the cache with the new alert and its expiry time
         cache.insert(text.clone(), now + self.alert_cache_expiry);
+
+        // Send alert to PagerDuty for critical alerts
+        if level == AlertLevel::Error {
+            let severity = "critical".to_string();
+            let source = "Watchtower System".to_string();
+            if let Err(e) = self.pagerduty_client.send_alert(severity, text.clone(), source).await {
+                log::error!("Failed to send alert to PagerDuty: {}", e);
+            }
+        }
 
         let params = AlertParams { text, level };
         self.alert_sender.send(params).unwrap();
