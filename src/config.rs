@@ -1,7 +1,7 @@
 use crate::alerter::AlertLevel;
 use crate::ethereum_actions::EthereumAction;
 
-use anyhow::Result;
+use anyhow::{Result, Context};
 use serde::Deserialize;
 use std::{env, fs, time::Duration};
 
@@ -9,6 +9,7 @@ pub static PRIVATE_KEY_ENV_VAR: &str = "WATCHTOWER_ETH_PRIVATE_KEY";
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct WatchtowerConfig {
+    pub watchtower_system_name: String,
     pub fuel_graphql: String,
     pub ethereum_rpc: String,
     pub state_contract_address: String,
@@ -137,6 +138,7 @@ pub fn default_amount() -> f64 {
     1000.0
 }
 
+// loads a config from a json file
 // loads a config from a json file
 pub fn load_config(file_path: &str) -> Result<WatchtowerConfig> {
     let json_string = fs::read_to_string(file_path)?;

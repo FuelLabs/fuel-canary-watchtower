@@ -1,4 +1,5 @@
 {
+  "watchtower_system_name": "Testing Canary",
   "fuel_graphql": "https://<fuel_graphql>",
   "ethereum_rpc": "https://<ethereum_rpc>",
   "state_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
@@ -6,7 +7,10 @@
   "gateway_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   "duplicate_alert_delay": 900,
   "pagerduty_api_key": "",
-  "alert_cache_expiry": 300000,
+  "alert_cache_expiry": {
+    "secs": 300000,
+    "nanos": 0
+  },
   "alert_cache_size": 100,
   "fuel_client_watcher": {
     "connection_alert": {

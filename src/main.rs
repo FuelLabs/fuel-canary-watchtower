@@ -10,8 +10,14 @@ pub static LOGGING_CONFIG_FILE: &str = "logging_config.yaml";
 async fn main() {
     setup_logging();
     let config_file = determine_config_file();
-    if let Ok(config) = load_config(&config_file) {
-        start_watchtower(&config).await;
+    match load_config(&config_file) {
+        Ok(config) => {
+            start_watchtower(&config).await;
+        }
+        Err(e) => {
+            log::error!("Error loading config: {}", e);
+            std::process::exit(1);
+        }
     }
 }
 
