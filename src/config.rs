@@ -1,7 +1,7 @@
 use crate::alerter::AlertLevel;
 use crate::ethereum_actions::EthereumAction;
 
-use anyhow::Result;
+use anyhow::{Result, Context};
 use serde::Deserialize;
 use std::{env, fs, time::Duration};
 
@@ -9,6 +9,7 @@ pub static PRIVATE_KEY_ENV_VAR: &str = "WATCHTOWER_ETH_PRIVATE_KEY";
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct WatchtowerConfig {
+    pub watchtower_system_name: String,
     pub fuel_graphql: String,
     pub ethereum_rpc: String,
     pub state_contract_address: String,
@@ -18,6 +19,7 @@ pub struct WatchtowerConfig {
     pub duplicate_alert_delay: u32,
     pub alert_cache_expiry: Duration,
     pub alert_cache_size: usize,
+    pub pagerduty_api_key: String,
     pub fuel_client_watcher: FuelClientWatcher,
     pub ethereum_client_watcher: EthereumClientWatcher,
 }
