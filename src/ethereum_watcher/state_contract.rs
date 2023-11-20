@@ -94,7 +94,7 @@ where
         if self.read_only {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
-        
+
         match &self.contract {
             Some(contract) => {
                 let result = contract.pause().call().await;
@@ -105,5 +105,126 @@ where
             }
             None => Err(anyhow::anyhow!("Contract not initialized")),
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use ethers::prelude::*;
+    use ethers::providers::Provider;
+    use fuels::accounts::fuel_crypto::coins_bip32::ecdsa::SigningKey;
+    use std::sync::Arc;
+
+    use super::StateContract;
+
+    async fn setup_state_contract() -> Result<(StateContract<Provider<MockProvider>>, MockProvider), Box<dyn std::error::Error>> {
+        let (provider, mock) = Provider::mocked();
+        let arc_provider = Arc::new(provider);
+
+        // contract.paused().call() response
+        let paused_response_hex: String = format!("0x{}", "00".repeat(32));
+        mock.push_response(
+            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
+        );
+        
+        let read_only: bool = false;
+        let chain_id: U64 = ethers::types::U64::from(1337);
+        let key_str: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
+        let state_contract_address: String = "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string();
+        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
+
+
+        // Create a new state_contract with the dependencies injected.
+        let state_contract: StateContract<Provider<MockProvider>> = StateContract::new(
+            state_contract_address,
+            read_only,
+            arc_provider,
+            wallet,
+        )?;
+
+        Ok((state_contract, mock))
+    }
+
+    #[tokio::test]
+    async fn new_state_contract_test() {
+        let (
+            state_contract,
+            _mock,
+        ) = setup_state_contract().await.expect("Setup failed");
+        assert_eq!(state_contract.read_only, false);
+        assert_eq!(state_contract.address, "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap());
+    }
+
+    #[tokio::test]
+    async fn initialize_state_contract_test() {
+        let (
+            mut state_contract,
+              mock,
+        ) = setup_state_contract().await.expect("Setup failed");
+
+        // Mock a successful response for the `paused` call
+        let paused_response_hex: String = format!("0x{}", "00".repeat(32));
+        mock.push_response(
+            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
+        );
+
+        let result = state_contract.initialize().await;
+        assert!(result.is_ok());
+        assert!(state_contract.contract.is_some());
+    }
+
+    #[tokio::test]
+    async fn get_latest_commits_test() {
+        let (
+            state_contract,
+            mock,
+        ) = setup_state_contract().await.expect("Setup failed");
+
+        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
+        let expected_commit:Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
+        let log_entry = Log {
+            address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
+            topics: vec![empty_data],
+            data: expected_commit.clone(),
+            block_hash: Some(empty_data),
+            block_number: Some(U64::from(42)),
+            transaction_hash: Some(empty_data),
+            transaction_index: Some(U64::from(1)),
+            log_index: Some(U256::from(2)),
+            transaction_log_index: Some(U256::from(3)),
+            log_type: Some("mined".to_string()),
+            removed: Some(false),
+        };
+
+        mock.push::<Vec<Log>, _>(vec![log_entry]).unwrap();
+
+        let mut bytes32_data: [u8; 32] = [0; 32];
+        bytes32_data.copy_from_slice(&expected_commit);
+
+        let block_num: u64 = 42;
+        let commits = state_contract.get_latest_commits(block_num).await.unwrap();
+        assert_eq!(&commits[0].as_slice(), &bytes32_data.as_slice());
+    }
+
+    #[tokio::test]
+    async fn pause_state_contract_test() {
+        let (
+            mut state_contract,
+              mock,
+        ) = setup_state_contract().await.expect("Setup failed");
+
+        // Test pause before initialization
+        assert!(state_contract.pause().await.is_err());
+
+        // Initialize and test pause after initialization
+        state_contract.initialize().await.expect("Initialization failed");
+
+        // Mock a successful response for the `pause` call
+        let pause_response_hex: String = format!("0x{}", "01".repeat(32));
+        mock.push_response(MockResponse::Value(serde_json::Value::String(pause_response_hex)));
+
+        // Test pause with the contract initialized
+        assert!(state_contract.pause().await.is_ok());
     }
 }
