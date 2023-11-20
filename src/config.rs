@@ -1,9 +1,9 @@
-use crate::alerts::AlertLevel;
+use crate::alerter::AlertLevel;
 use crate::ethereum_actions::EthereumAction;
 
 use anyhow::Result;
 use serde::Deserialize;
-use std::{env, fs};
+use std::{env, fs, time::Duration};
 
 pub static PRIVATE_KEY_ENV_VAR: &str = "WATCHTOWER_ETH_PRIVATE_KEY";
 
@@ -16,6 +16,8 @@ pub struct WatchtowerConfig {
     pub gateway_contract_address: String,
     pub ethereum_wallet_key: Option<String>,
     pub duplicate_alert_delay: u32,
+    pub alert_cache_expiry: Duration,
+    pub alert_cache_size: usize,
     pub fuel_client_watcher: FuelClientWatcher,
     pub ethereum_client_watcher: EthereumClientWatcher,
 }

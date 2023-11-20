@@ -1,6 +1,6 @@
 use std::future::Future;
 use std::time::Duration;
-use crate::alerts::{AlertLevel, WatchtowerAlerts};
+use crate::alerter::{AlertLevel, WatchtowerAlerter};
 use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
 use crate::ethereum_watcher::portal_contract::PortalContract;
@@ -36,7 +36,7 @@ struct ActionParams {
 
 impl WatchtowerEthereumActions {
     pub async fn new(
-        alerts: WatchtowerAlerts,
+        alerts: WatchtowerAlerter,
         state_contract: StateContract<GasEscalatorMiddleware<Provider<Http>>>,
         portal_contract: PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
         gateway_contract: GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
@@ -54,7 +54,7 @@ impl WatchtowerEthereumActions {
                     params.alert_level,
                 ).await;
             }
-            alerts.alert(String::from(THREAD_CONNECTIONS_ERR), AlertLevel::Error);
+            alerts.alert(String::from(THREAD_CONNECTIONS_ERR), AlertLevel::Error).await;
             panic!("{}", THREAD_CONNECTIONS_ERR);
         });
 
@@ -64,28 +64,28 @@ impl WatchtowerEthereumActions {
     async fn pause_contract<F>(
         contract_name: &str,
         pause_future: F,
-        alerts: &WatchtowerAlerts,
+        alerts: &WatchtowerAlerter,
         alert_level: AlertLevel,
     )
         where
             F: Future<Output = Result<(), anyhow::Error>> + Send,
     {
-        alerts.alert(format!("Pausing {} contract.", contract_name), AlertLevel::Info);
+        alerts.alert(format!("Pausing {} contract.", contract_name), AlertLevel::Info).await;
     
         // Set a duration for the timeout
         let timeout_duration = Duration::from_secs(30);
     
         match timeout(timeout_duration, pause_future).await {
             Ok(Ok(_)) => {
-                alerts.alert(format!("Successfully paused {} contract.", contract_name), AlertLevel::Info);
+                alerts.alert(format!("Successfully paused {} contract.", contract_name), AlertLevel::Info).await;
             },
             Ok(Err(e)) => {
                 // This is the case where pause_future completed, but resulted in an error.
-                alerts.alert(e.to_string(), alert_level);
+                alerts.alert(e.to_string(), alert_level).await;
             },
             Err(_) => {
                 // This is the timeout case
-                alerts.alert(format!("Timeout while pausing {} contract.", contract_name), alert_level);
+                alerts.alert(format!("Timeout while pausing {} contract.", contract_name), alert_level).await;
             }
         }
     }
@@ -95,7 +95,7 @@ impl WatchtowerEthereumActions {
         state_contract: &StateContract<GasEscalatorMiddleware<Provider<Http>>>,
         portal_contract: &PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
         gateway_contract: &GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
-        alerts: &WatchtowerAlerts,
+        alerts: &WatchtowerAlerter,
         alert_level: AlertLevel,
     ) {
         match action {

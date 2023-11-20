@@ -1,4 +1,4 @@
-use crate::alerts::{AlertLevel, WatchtowerAlerts};
+use crate::alerter::{AlertLevel, WatchtowerAlerter};
 use crate::ethereum_actions::WatchtowerEthereumActions;
 use crate::fuel_watcher::fuel_chain::FuelChain;
 use crate::WatchtowerConfig;
@@ -30,7 +30,7 @@ pub static ETHEREUM_BLOCK_TIME: u64 = 12;
 
 async fn check_chain_connection(
     ethereum_chain: &EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &EthereumClientWatcher,
 ) {
@@ -42,7 +42,7 @@ async fn check_chain_connection(
         alerts.alert(
             format!("Failed to check ethereum connection: {}", e),
             watch_config.connection_alert.alert_level.clone(),
-        );
+        ).await;
         actions.action(
             watch_config.connection_alert.alert_action.clone(),
             Some(watch_config.connection_alert.alert_level.clone()),
@@ -52,7 +52,7 @@ async fn check_chain_connection(
 
 async fn check_block_production(
     ethereum_chain: &EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &EthereumClientWatcher,
 ) {
@@ -67,7 +67,7 @@ async fn check_block_production(
             alerts.alert(
                 format!("Failed to check ethereum block production: {}", e),
                 watch_config.block_production_alert.alert_level.clone(),
-            );
+            ).await;
             actions.action(
                 watch_config.block_production_alert.alert_action.clone(),
                 Some(watch_config.block_production_alert.alert_level.clone()),
@@ -83,7 +83,7 @@ async fn check_block_production(
                 watch_config.block_production_alert.max_block_time, seconds_since_last_block
             ),
             watch_config.block_production_alert.alert_level.clone(),
-        );
+        ).await;
         actions.action(
             watch_config.block_production_alert.alert_action.clone(),
             Some(watch_config.block_production_alert.alert_level.clone()),
@@ -93,7 +93,7 @@ async fn check_block_production(
 
 async fn check_account_balance(
     ethereum_chain: &EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &EthereumClientWatcher,
     account_address: &Option<String>,
@@ -123,7 +123,7 @@ async fn check_account_balance(
                         address, balance,
                     ),
                     watch_config.account_funds_alert.alert_level.clone(),
-                );
+                ).await;
                 actions.action(
                     watch_config.account_funds_alert.alert_action.clone(),
                     Some(watch_config.account_funds_alert.alert_level.clone()),
@@ -134,7 +134,7 @@ async fn check_account_balance(
             alerts.alert(
                 format!("Failed to check ethereum account funds: {}", e),
                 watch_config.account_funds_alert.alert_level.clone(),
-            );
+            ).await;
             actions.action(
                 watch_config.account_funds_alert.alert_action.clone(),
                 Some(watch_config.account_funds_alert.alert_level.clone()),
@@ -145,7 +145,7 @@ async fn check_account_balance(
 
 async fn check_invalid_commits(
     state_contract: &StateContract<GasEscalatorMiddleware<Provider<Http>>>,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &EthereumClientWatcher,
     fuel_chain: &FuelChain,
@@ -165,7 +165,7 @@ async fn check_invalid_commits(
             alerts.alert(
                 format!("Failed to check state contract commits: {e}"),
                 watch_config.invalid_state_commit_alert.alert_level.clone(),
-            );
+            ).await;
             actions.action(
                 watch_config.invalid_state_commit_alert.alert_action.clone(),
                 Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
@@ -183,7 +183,7 @@ async fn check_invalid_commits(
                             "An invalid commit was made on the state contract. Hash: {}", hash,
                         ),
                         watch_config.invalid_state_commit_alert.alert_level.clone(),
-                    );
+                    ).await;
                     actions.action(
                         watch_config.invalid_state_commit_alert.alert_action.clone(),
                         Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
@@ -194,7 +194,7 @@ async fn check_invalid_commits(
                 alerts.alert(
                     format!("Failed to check state contract commits: {}", e),
                     watch_config.invalid_state_commit_alert.alert_level.clone(),
-                );
+                ).await;
                 actions.action(
                     watch_config.invalid_state_commit_alert.alert_action.clone(),
                     Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
@@ -211,7 +211,7 @@ async fn check_invalid_commits(
 
 async fn check_base_asset_deposits(
     portal_contract: &PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &EthereumClientWatcher,
     last_commit_check_block: &u64,
@@ -234,7 +234,7 @@ async fn check_base_asset_deposits(
                 alerts.alert(
                     format!("Failed to check base asset deposits: {}", e),
                     portal_deposit_alert.alert_level.clone(),
-                );
+                ).await;
                 actions.action(
                     portal_deposit_alert.alert_action.clone(),
                     Some(portal_deposit_alert.alert_level.clone()),
@@ -254,7 +254,7 @@ async fn check_base_asset_deposits(
                     amount_threshold, time_frame, amount
                 ),
                 portal_deposit_alert.alert_level.clone(),
-            );
+            ).await;
             actions.action(
                 portal_deposit_alert.alert_action.clone(),
                 Some(portal_deposit_alert.alert_level.clone()),
@@ -265,7 +265,7 @@ async fn check_base_asset_deposits(
 
 async fn check_erc20_token_deposits(
     gateway_contract: &GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
-    alerts: &WatchtowerAlerts,
+    alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
     watch_config: &EthereumClientWatcher,
     last_commit_check_block: u64,
@@ -294,7 +294,7 @@ async fn check_erc20_token_deposits(
                 alerts.alert(
                     format!("Failed to check ERC20 deposits: {}", e),
                     gateway_deposit_alert.alert_level.clone(),
-                );
+                ).await;
                 actions.action(
                     gateway_deposit_alert.alert_action.clone(),
                     Some(gateway_deposit_alert.alert_level.clone()),
@@ -315,7 +315,7 @@ async fn check_erc20_token_deposits(
                     gateway_deposit_alert.time_frame, amount, gateway_deposit_alert.token_name
                 ),
                 gateway_deposit_alert.alert_level.clone(),
-            );
+            ).await;
             actions.action(
                 gateway_deposit_alert.alert_action.clone(),
                 Some(gateway_deposit_alert.alert_level.clone()),
@@ -327,7 +327,7 @@ async fn check_erc20_token_deposits(
 pub async fn start_ethereum_watcher(
     config: &WatchtowerConfig,
     actions: WatchtowerEthereumActions,
-    alerts: WatchtowerAlerts,
+    alerts: WatchtowerAlerter,
     fuel_chain: FuelChain,
     ethereum_chain: EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
     state_contract: StateContract<GasEscalatorMiddleware<Provider<Http>>>,
@@ -349,7 +349,7 @@ pub async fn start_ethereum_watcher(
     let handle = tokio::spawn(async move {
         loop {
 
-            alerts.alert(String::from("Watching ethereum chain."), AlertLevel::Info);
+            alerts.alert(String::from("Watching ethereum chain."), AlertLevel::Info).await;
             for _ in 0..POLL_LOGGING_SKIP {
 
                 check_chain_connection(&ethereum_chain, &alerts, &actions, &watch_config).await;

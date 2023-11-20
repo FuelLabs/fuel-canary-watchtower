@@ -2,10 +2,13 @@ use crate::WatchtowerConfig;
 
 use anyhow::Result;
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, Instant};
 use tokio::sync::mpsc::error::TryRecvError::{Disconnected, Empty};
 use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::Mutex;
 
 static MIN_DURATION_FROM_START_TO_ERR: Duration = Duration::from_millis(60 * 60 * 1000);
 static THREAD_CONNECTIONS_ERR: &str = "Connections to the alerts thread have all closed.";
@@ -20,8 +23,10 @@ pub enum AlertLevel {
 }
 
 #[derive(Clone, Debug)]
-pub struct WatchtowerAlerts {
+pub struct WatchtowerAlerter {
     alert_sender: UnboundedSender<AlertParams>,
+    alert_cache: Arc<Mutex<HashMap<String, Instant>>>,
+    alert_cache_expiry: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -32,14 +37,19 @@ struct AlertParams {
 
 // TODO: buffer message alerts to avoid duplicates
 
-impl WatchtowerAlerts {
-    pub fn new(_config: &WatchtowerConfig) -> Result<Self> {
+impl WatchtowerAlerter {
+    pub fn new(config: &WatchtowerConfig) -> Result<Self> {
         let start = SystemTime::now();
 
-        // TODO: setup connection with alert messaging
+        let alert_cache = Arc::new(Mutex::new(HashMap::with_capacity(config.alert_cache_size)));
+        let alert_cache_expiry = config.alert_cache_expiry;
 
         // start handler thread for alert function
-        let (tx, mut rx) = mpsc::unbounded_channel::<AlertParams>();
+        let (
+            alert_sender,
+            mut rx,
+        ) = mpsc::unbounded_channel::<AlertParams>();
+
         tokio::spawn(async move {
             loop {
                 let received_result = rx.try_recv();
@@ -88,10 +98,26 @@ impl WatchtowerAlerts {
             }
         });
 
-        Ok(WatchtowerAlerts { alert_sender: tx })
+        Ok(WatchtowerAlerter { alert_sender, alert_cache, alert_cache_expiry })
     }
 
-    pub fn alert(&self, text: String, level: AlertLevel) {
+    pub async fn alert(&self, text: String, level: AlertLevel) {
+        let now = Instant::now();
+        let mut cache = self.alert_cache.lock().await;
+
+        // Check and possibly remove expired alerts
+        cache.retain(|_, &mut expiry| now < expiry);
+
+        // Check if the alert is already in the cache and hasn't expired
+        if let Some(&expiry) = cache.get(&text) {
+            if now < expiry {
+                return;
+            }
+        }
+
+        // Update the cache with the new alert and its expiry time
+        cache.insert(text.clone(), now + self.alert_cache_expiry);
+
         let params = AlertParams { text, level };
         self.alert_sender.send(params).unwrap();
     }
