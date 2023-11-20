@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, Instant};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::sync::Mutex;
 
-static MIN_DURATION_FROM_START_TO_ERR: Duration = Duration::from_millis(0);
+static MIN_DURATION_FROM_START_TO_ERR: Duration = Duration::from_millis(60 * 60 * 1000);
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum AlertLevel {
