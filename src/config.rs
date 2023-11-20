@@ -139,7 +139,6 @@ pub fn default_amount() -> f64 {
 }
 
 // loads a config from a json file
-// loads a config from a json file
 pub fn load_config(file_path: &str) -> Result<WatchtowerConfig> {
     let json_string = fs::read_to_string(file_path)?;
     let mut config: WatchtowerConfig = serde_json::from_str(&json_string)?;
