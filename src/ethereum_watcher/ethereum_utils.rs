@@ -87,3 +87,52 @@ pub fn process_logs(logs: Vec<Log>) -> Result<Vec<Bytes32>> {
     }
     Ok(extracted_data)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ethers::prelude::*;
+    use ethers::types::{Log, U64};
+
+    #[test]
+    fn test_get_value() {
+        // Test with a small decimal value
+        assert_eq!(get_value(1.23, 2), U256::from(123));
+
+        // Test with a large decimal value
+        assert_eq!(get_value(1234.56789, 5), U256::from(123456789));
+
+        // Test with zero decimals
+        assert_eq!(get_value(1234.56789, 0), U256::from(1234));
+    }
+
+    #[test]
+    fn test_process_logs() {
+
+        let expected_commit:Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
+        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
+        let log_entry = Log {
+            address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
+            topics: vec![empty_data],
+            data: expected_commit.clone(),
+            block_hash: Some(empty_data),
+            block_number: Some(U64::from(42)),
+            transaction_hash: Some(empty_data),
+            transaction_index: Some(U64::from(1)),
+            log_index: Some(U256::from(2)),
+            transaction_log_index: Some(U256::from(3)),
+            log_type: Some("mined".to_string()),
+            removed: Some(false),
+        };
+
+        let logs = vec![log_entry];
+        assert!(process_logs(logs).is_ok(), "Should succeed with correct log data length");
+
+        let incorrect_log = Log {
+            data: vec![0; 31].into(),
+            ..Default::default()
+        };
+        let logs = vec![incorrect_log];
+        assert!(process_logs(logs).is_err(), "Should fail with incorrect log data length");
+    }
+}
