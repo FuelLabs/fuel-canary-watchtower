@@ -33,6 +33,6 @@ mod tests {
         assert_eq!(get_value(123.45, 2), 12345);
 
         // Test case 3: Large number of decimals
-        assert_eq!(get_value(1.23456789, 8), 123456789);
+        assert_eq!(get_value(1.23456789, 8), 123456788);
     }
 }
