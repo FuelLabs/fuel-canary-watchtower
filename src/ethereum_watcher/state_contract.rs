@@ -152,7 +152,7 @@ mod tests {
             state_contract,
             _mock,
         ) = setup_state_contract().await.expect("Setup failed");
-        assert_eq!(state_contract.read_only, false);
+        assert!(!state_contract.read_only);
         assert_eq!(state_contract.address, "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap());
     }
 

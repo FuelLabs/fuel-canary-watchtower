@@ -4,7 +4,7 @@ use crate::alerter::{AlertLevel, WatchtowerAlerter};
 use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
 use crate::ethereum_watcher::portal_contract::PortalContract;
-use crate::pagerduty::HttpPoster;
+
 
 use anyhow::Result;
 use ethers::providers::{Http, Provider};

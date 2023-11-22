@@ -158,7 +158,7 @@ mod tests {
         let addr = "0x0000000000000000000000000000000000000000";
         let balance = U256::from(1000);
         
-        mock.push_response(MockResponse::Value(serde_json::to_value(&balance).unwrap()));
+        mock.push_response(MockResponse::Value(serde_json::to_value(balance).unwrap()));
 
         let result = chain.get_account_balance(addr).await;
         assert!(result.is_ok());

@@ -206,7 +206,7 @@ mod tests {
             portal_contract,
              _,
         ) = setup_portal_contract().await.expect("Setup failed");
-        assert_eq!(portal_contract.read_only, false);
+        assert!(!portal_contract.read_only);
         assert_eq!(portal_contract.address, "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap());
     }
 

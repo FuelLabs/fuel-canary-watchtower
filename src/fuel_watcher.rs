@@ -1,12 +1,12 @@
 use crate::alerter::{AlertLevel, WatchtowerAlerter};
 use crate::ethereum_actions::WatchtowerEthereumActions;
 use crate::WatchtowerConfig;
-use crate::pagerduty::HttpPoster;
+
 
 use anyhow::Result;
 use fuel_chain::FuelChain;
-use reqwest::Client;
-use std::sync::Arc;
+
+
 use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
