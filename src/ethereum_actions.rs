@@ -4,6 +4,7 @@ use crate::alerter::{AlertLevel, WatchtowerAlerter};
 use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
 use crate::ethereum_watcher::portal_contract::PortalContract;
+use crate::pagerduty::HttpPoster;
 
 use anyhow::Result;
 use ethers::providers::{Http, Provider};
@@ -14,8 +15,9 @@ use tokio::time::timeout;
 
 pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed.";
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug, Default)]
 pub enum EthereumAction {
+    #[default]
     None,
     PauseState,
     PauseGateway,

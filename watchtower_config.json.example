@@ -5,6 +5,10 @@
   "state_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   "portal_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   "gateway_contract_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "min_duration_from_start_to_err": {
+    "secs": 300000,
+    "nanos": 0
+  },
   "duplicate_alert_delay": 900,
   "pagerduty_api_key": "",
   "alert_cache_expiry": {

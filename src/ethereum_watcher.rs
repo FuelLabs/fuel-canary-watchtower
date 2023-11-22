@@ -2,6 +2,7 @@ use crate::alerter::{AlertLevel, WatchtowerAlerter};
 use crate::ethereum_actions::WatchtowerEthereumActions;
 use crate::fuel_watcher::fuel_chain::FuelChain;
 use crate::WatchtowerConfig;
+use crate::pagerduty::HttpPoster;
 
 use anyhow::Result;
 use ethereum_chain::EthereumChain;

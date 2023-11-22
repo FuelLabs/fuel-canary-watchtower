@@ -7,7 +7,7 @@ use std::{env, fs, time::Duration};
 
 pub static PRIVATE_KEY_ENV_VAR: &str = "WATCHTOWER_ETH_PRIVATE_KEY";
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct WatchtowerConfig {
     pub watchtower_system_name: String,
     pub fuel_graphql: String,
@@ -17,6 +17,7 @@ pub struct WatchtowerConfig {
     pub gateway_contract_address: String,
     pub ethereum_wallet_key: Option<String>,
     pub duplicate_alert_delay: u32,
+    pub min_duration_from_start_to_err: Duration,
     pub alert_cache_expiry: Duration,
     pub alert_cache_size: usize,
     pub pagerduty_api_key: String,
@@ -24,7 +25,7 @@ pub struct WatchtowerConfig {
     pub ethereum_client_watcher: EthereumClientWatcher,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct FuelClientWatcher {
     pub connection_alert: GenericAlert,
     pub block_production_alert: BlockProductionAlert,
@@ -32,7 +33,7 @@ pub struct FuelClientWatcher {
     pub gateway_withdraw_alerts: Vec<WithdrawAlert>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct EthereumClientWatcher {
     pub connection_alert: GenericAlert,
     pub block_production_alert: BlockProductionAlert,
@@ -42,7 +43,7 @@ pub struct EthereumClientWatcher {
     pub gateway_deposit_alerts: Vec<DepositAlert>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct GenericAlert {
     #[serde(default = "default_alert_level")]
     pub alert_level: AlertLevel,
@@ -50,7 +51,7 @@ pub struct GenericAlert {
     pub alert_action: EthereumAction,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct BlockProductionAlert {
     #[serde(default = "default_alert_level")]
     pub alert_level: AlertLevel,
@@ -60,7 +61,7 @@ pub struct BlockProductionAlert {
     pub max_block_time: u32,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct AccountFundsAlert {
     #[serde(default = "default_alert_level")]
     pub alert_level: AlertLevel,
@@ -70,7 +71,7 @@ pub struct AccountFundsAlert {
     pub min_balance: f64,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct DepositAlert {
     #[serde(default = "default_alert_level")]
     pub alert_level: AlertLevel,
@@ -88,7 +89,7 @@ pub struct DepositAlert {
     pub amount: f64,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct WithdrawAlert {
     #[serde(default = "default_alert_level")]
     pub alert_level: AlertLevel,

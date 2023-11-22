@@ -5,6 +5,8 @@ mod ethereum_actions;
 pub(crate) mod ethereum_watcher;
 mod fuel_watcher;
 
+use std::sync::Arc;
+
 pub use config::{load_config, WatchtowerConfig};
 use alerter::{AlertLevel, WatchtowerAlerter};
 use anyhow::Result;
@@ -19,6 +21,7 @@ use ethereum_watcher::{
 };
 use fuel_watcher::start_fuel_watcher;
 use pagerduty::PagerDutyClient;
+use reqwest::Client;
 use tokio::task::JoinHandle;
 use crate::ethereum_watcher::{
     gateway_contract::GatewayContract,
@@ -77,7 +80,7 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
         ether_provider,
     ).await?;
 
-    let pagerduty_client = PagerDutyClient::new(config.pagerduty_api_key.clone());
+    let pagerduty_client = PagerDutyClient::new(config.pagerduty_api_key.clone(), Arc::new(Client::new()));
     let alerts = WatchtowerAlerter::new(config, pagerduty_client).map_err(
         |e| anyhow::anyhow!("Failed to setup alerts: {}", e),
     )?;
