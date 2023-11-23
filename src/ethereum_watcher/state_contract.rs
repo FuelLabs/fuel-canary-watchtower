@@ -16,10 +16,7 @@ use std::sync::Arc;
 abigen!(FuelChainState, "./abi/FuelChainState.json");
 
 #[derive(Clone, Debug)]
-pub struct StateContract<P>
-where
-    P: Middleware,
-{
+pub struct StateContract<P: Middleware>{
     provider: Arc<P>,
     wallet:  Wallet<SigningKey>,
     contract: Option<FuelChainState<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>>,
@@ -27,10 +24,7 @@ where
     read_only: bool,
 }
 
-impl <P>StateContract<P>
-where
-    P: Middleware + 'static,
-{   
+impl <P: Middleware + 'static>StateContract<P>{   
     pub fn new(
         state_contract_address: String,
         read_only: bool,
@@ -112,46 +106,21 @@ where
 #[cfg(test)]
 mod tests {
     use ethers::prelude::*;
-    use ethers::providers::Provider;
-    use fuels::accounts::fuel_crypto::coins_bip32::ecdsa::SigningKey;
-    use std::sync::Arc;
-
-    use super::StateContract;
-
-    async fn setup_state_contract() -> Result<(StateContract<Provider<MockProvider>>, MockProvider), Box<dyn std::error::Error>> {
-        let (provider, mock) = Provider::mocked();
-        let arc_provider = Arc::new(provider);
-
-        // contract.paused().call() response
-        let paused_response_hex: String = format!("0x{}", "00".repeat(32));
-        mock.push_response(
-            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
-        );
-        
-        let read_only: bool = false;
-        let chain_id: U64 = ethers::types::U64::from(1337);
-        let key_str: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
-        let state_contract_address: String = "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string();
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
-
-
-        // Create a new state_contract with the dependencies injected.
-        let state_contract: StateContract<Provider<MockProvider>> = StateContract::new(
-            state_contract_address,
-            read_only,
-            arc_provider,
-            wallet,
-        )?;
-
-        Ok((state_contract, mock))
-    }
+    use crate::test_utils::test_utils::{setup_state_contract, setup_wallet_and_provider};
 
     #[tokio::test]
     async fn new_state_contract_test() {
         let (
-            state_contract,
-            _mock,
-        ) = setup_state_contract().await.expect("Setup failed");
+            provider,
+            mock,
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let state_contract = setup_state_contract(
+            provider,
+            mock,
+            wallet,
+        ).expect("Setup failed");
+
         assert!(!state_contract.read_only);
         assert_eq!(state_contract.address, "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap());
     }
@@ -159,9 +128,15 @@ mod tests {
     #[tokio::test]
     async fn initialize_state_contract_test() {
         let (
-            mut state_contract,
-              mock,
-        ) = setup_state_contract().await.expect("Setup failed");
+            provider,
+            mock,
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let mut state_contract = setup_state_contract(
+            provider,
+            mock.clone(),
+            wallet,
+        ).expect("Setup failed");
 
         // Mock a successful response for the `paused` call
         let paused_response_hex: String = format!("0x{}", "00".repeat(32));
@@ -177,9 +152,15 @@ mod tests {
     #[tokio::test]
     async fn get_latest_commits_test() {
         let (
-            state_contract,
+            provider,
             mock,
-        ) = setup_state_contract().await.expect("Setup failed");
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let state_contract = setup_state_contract(
+            provider,
+            mock.clone(),
+            wallet,
+        ).expect("Setup failed");
 
         let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
         let expected_commit:Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
@@ -210,9 +191,15 @@ mod tests {
     #[tokio::test]
     async fn pause_state_contract_test() {
         let (
-            mut state_contract,
-              mock,
-        ) = setup_state_contract().await.expect("Setup failed");
+            provider,
+            mock,
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let mut state_contract = setup_state_contract(
+            provider,
+            mock.clone(),
+            wallet,
+        ).expect("Setup failed");
 
         // Test pause before initialization
         assert!(state_contract.pause().await.is_err());

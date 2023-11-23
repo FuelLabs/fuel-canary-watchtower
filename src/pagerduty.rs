@@ -76,6 +76,7 @@ impl PagerDutyClient {
         summary: String,
         source: String,
     ) -> Result<(), ReqwestError> {
+
         // Create a payload to send to PagerDuty
         let payload = PagerDutyPayload {
             payload: PagerDutyEventPayload {

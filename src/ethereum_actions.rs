@@ -128,3 +128,46 @@ impl WatchtowerEthereumActions {
         self.action_sender.send(params).unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    // #[tokio::test]
+    // async fn test_pause_state_contract() {
+    //     let mut mock_state_contract = MockStateContract::new();
+    //     mock_state_contract.expect_pause()
+    //         .times(1)
+    //         .returning(|| Ok(()));
+
+    //     let mut mock_alerts = MockWatchtowerAlerter::new();
+    //     mock_alerts.expect_alert()
+    //         .withf(|msg, level| msg.contains("Pausing state contract") && *level == AlertLevel::Info)
+    //         .times(1)
+    //         .return_once(|_, _| ());
+
+    //     mock_alerts.expect_alert()
+    //         .withf(|msg, level| msg.contains("Successfully paused state contract") && *level == AlertLevel::Info)
+    //         .times(1)
+    //         .return_once(|_, _| ());
+
+    //     let (tx, mut rx) = mpsc::unbounded_channel::<ActionParams>();
+    //     let actions = WatchtowerEthereumActions { action_sender: tx };
+
+    //     actions.action(EthereumAction::PauseState, Some(AlertLevel::Info));
+
+    //     if let Some(params) = rx.recv().await {
+    //         WatchtowerEthereumActions::handle_action(
+    //             params.action,
+    //             &mock_state_contract,
+    //             &MockPortalContract::new(),  // Mocks for other contracts
+    //             &MockGatewayContract::new(),
+    //             &mock_alerts,
+    //             params.alert_level,
+    //         ).await;
+    //     }
+    // }
+
+    // Similar tests can be written for testing pause_gateway, pause_portal, and pause_all
+}

@@ -32,7 +32,6 @@ pub struct WithdrawalEvent {
 }
 
 impl FuelChain {
-
     pub fn new(provider: Arc<Provider>) -> Result<Self> {
         Ok(FuelChain { provider })
     }

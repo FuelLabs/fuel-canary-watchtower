@@ -10,17 +10,11 @@ use std::sync::Arc;
 pub use ethers::types::U256;
 
 #[derive(Clone, Debug)]
-pub struct EthereumChain<P>
-where
-    P: Middleware,
-{
+pub struct EthereumChain<P: Middleware>{
     provider: Arc<P>,
 }
 
-impl <P>EthereumChain<P>
-where
-    P: Middleware + 'static,
-{
+impl <P: Middleware + 'static>EthereumChain<P> {
     pub async fn new(provider: Arc<P>) -> Result<Self> {
         Ok(EthereumChain { provider })
     }
@@ -41,14 +35,11 @@ where
         let mut block_option = None;
 
         for _ in 0..ETHEREUM_CONNECTION_RETRIES {
-            match self.provider.get_block(block_num).await {
-                Ok(block) => {
-                    block_option = block;
-                    break;
-                }
-                Err(_) => {
-                    // Optionally log each retry failure here
-                }
+            if let Ok(block) = self.provider.get_block(
+                block_num,
+            ).await {
+                block_option = block;
+                break;
             }
         }
 

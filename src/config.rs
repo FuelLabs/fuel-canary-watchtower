@@ -40,7 +40,9 @@ pub struct EthereumClientWatcher {
     pub account_funds_alert: AccountFundsAlert,
     pub invalid_state_commit_alert: GenericAlert,
     pub portal_deposit_alerts: Vec<DepositAlert>,
+    pub portal_withdrawal_alerts: Vec<WithdrawAlert>,
     pub gateway_deposit_alerts: Vec<DepositAlert>,
+    pub gateway_withdrawal_alerts: Vec<WithdrawAlert>,
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]

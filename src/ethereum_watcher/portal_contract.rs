@@ -4,8 +4,8 @@ use anyhow::Result;
 use ethers::abi::Address;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::{abigen, SignerMiddleware};
-use ethers::providers::{Middleware};
-use ethers::signers::{Wallet};
+use ethers::providers::Middleware;
+use ethers::signers::Wallet;
 use ethers::types::{Filter, H160, U256};
 use std::cmp::max;
 
@@ -16,10 +16,7 @@ use std::sync::Arc;
 abigen!(FuelMessagePortal, "./abi/FuelMessagePortal.json");
 
 #[derive(Clone, Debug)]
-pub struct PortalContract<P>
-where
-    P: Middleware,
-{
+pub struct PortalContract<P: Middleware>{
     provider: Arc<P>,
     wallet:  Wallet<SigningKey>,
     contract: Option<FuelMessagePortal<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>>,
@@ -27,10 +24,7 @@ where
     read_only: bool,
 }
 
-impl <P>PortalContract<P>
-where
-    P: Middleware + 'static,
-{
+impl <P: Middleware + 'static>PortalContract<P>{
     pub fn new(
         portal_contract_address: String,
         read_only: bool,
@@ -61,12 +55,11 @@ where
         );
 
         // Try calling a read function to check if the contract is valid
-        match contract.paused().call().await {
-            Err(_) => Err(anyhow::anyhow!("Invalid portal contract.")),
-            Ok(_) => {
-                self.contract = Some(contract);
-                Ok(())
-            }
+        if contract.paused().call().await.is_ok() {
+            self.contract = Some(contract);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Invalid portal contract."))
         }
     }
 
@@ -162,63 +155,42 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ethers::abi::Token;
     use ethers::prelude::*;
-    use ethers::providers::Provider;
-    use std::sync::Arc;
-
-    use super::PortalContract;
-
-    // Mock setup function for PortalContract
-    async fn setup_portal_contract() -> Result<(PortalContract<Provider<MockProvider>>, MockProvider), Box<dyn std::error::Error>> {
-
-        let (provider, mock) = Provider::mocked();
-        let arc_provider = Arc::new(provider);
-
-        // contract.paused().call() response
-        let paused_response_hex: String = format!("0x{}", "00".repeat(32));
-        mock.push_response(
-            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
-        );
-        
-        let read_only: bool = false;
-        let chain_id: U64 = ethers::types::U64::from(1337);
-        let key_str: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
-        let portal_contract_address: String = "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string();
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
-        
-
-        // Create a new portal_contract with the dependencies injected.
-        let portal_contract: PortalContract<Provider<MockProvider>> = PortalContract::new(
-            portal_contract_address,
-            read_only,
-            arc_provider,
-            wallet,
-        )?;
-
-        Ok((portal_contract, mock))
-    }
+    use crate::test_utils::test_utils::{setup_portal_contract, setup_wallet_and_provider};
 
     #[tokio::test]
     async fn new_portal_contract_test() {
         let (
-            portal_contract,
-             _,
-        ) = setup_portal_contract().await.expect("Setup failed");
+            provider,
+            mock,
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let portal_contract = setup_portal_contract(
+            provider,
+            mock,
+            wallet,
+        ).await.expect("Setup failed");
+
         assert!(!portal_contract.read_only);
-        assert_eq!(portal_contract.address, "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap());
+        assert_eq!(portal_contract.address, "0x03f2901Db5723639978deBed3aBA66d4EA03aF73".parse().unwrap());
     }
 
     #[tokio::test]
     async fn initialize_portal_contract_test() {
         let (
-            mut portal_contract,
-            mock_provider,
-        ) = setup_portal_contract().await.expect("Setup failed");
+            provider,
+            mock,
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let mut portal_contract = setup_portal_contract(
+            provider,
+            mock.clone(),
+            wallet,
+        ).await.expect("Setup failed");
 
         let additional_response_hex = format!("0x{}", "00".repeat(32));
-        mock_provider.push_response(
+        mock.push_response(
             MockResponse::Value(serde_json::Value::String(additional_response_hex)),
         );
 
@@ -229,7 +201,16 @@ mod tests {
 
     #[tokio::test]
     async fn get_base_amount_deposited_test() {
-        let (portal_contract, mock) = setup_portal_contract().await.expect("Setup failed");
+        let (
+            provider,
+            mock,
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let portal_contract = setup_portal_contract(
+            provider,
+            mock.clone(),
+            wallet,
+        ).await.expect("Setup failed");
 
         // Serialize the deposit amounts to a byte vector
         let deposit_data_one: Vec<u8> = ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]);
@@ -268,7 +249,10 @@ mod tests {
         // Call get_base_amount_deposited
         let timeframe = 30;
         let latest_block_num = 42;
-        let result: std::prelude::v1::Result<U256, anyhow::Error> = portal_contract.get_base_amount_deposited(timeframe, latest_block_num).await;
+        let result: std::prelude::v1::Result<U256, anyhow::Error> = portal_contract.get_base_amount_deposited(
+            timeframe,
+            latest_block_num,
+        ).await;
 
         // Assert that the method call was successful
         assert!(result.is_ok(), "Failed to get base amount deposited");
@@ -279,7 +263,16 @@ mod tests {
 
     #[tokio::test]
     async fn get_base_amount_withdrawn_test() {
-        let (portal_contract, mock) = setup_portal_contract().await.expect("Setup failed");
+        let (
+            provider,
+            mock,
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let portal_contract = setup_portal_contract(
+            provider,
+            mock.clone(),
+            wallet,
+        ).await.expect("Setup failed");
 
         // Serialize the withdrawal amounts to a byte vector
         let withdrawal_data_one: Vec<u8> = ethers::abi::encode(&[Token::Uint(U256::from(50000u64))]);
@@ -318,7 +311,10 @@ mod tests {
         // Call get_base_amount_withdrawn
         let timeframe = 30;
         let latest_block_num = 100;
-        let result: std::prelude::v1::Result<U256, anyhow::Error> = portal_contract.get_base_amount_withdrawn(timeframe, latest_block_num).await;
+        let result: std::prelude::v1::Result<U256, anyhow::Error> = portal_contract.get_base_amount_withdrawn(
+            timeframe,
+            latest_block_num,
+        ).await;
 
         // Assert that the method call was successful
         assert!(result.is_ok(), "Failed to get amount withdrawn");
@@ -332,9 +328,15 @@ mod tests {
     #[tokio::test]
     async fn pause_portal_contract_test() {
         let (
-            mut portal_contract,
-             mock,
-        ) = setup_portal_contract().await.expect("Setup failed");
+            provider,
+            mock,
+            wallet,
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let mut portal_contract = setup_portal_contract(
+            provider,
+            mock.clone(),
+            wallet,
+        ).await.expect("Setup failed");
 
         // Test pause without initializing the contract
         assert!(portal_contract.pause().await.is_err());

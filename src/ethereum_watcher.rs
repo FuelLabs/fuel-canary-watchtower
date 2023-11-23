@@ -264,7 +264,61 @@ async fn check_base_asset_deposits(
     }
 }
 
-async fn check_erc20_token_deposits(
+async fn check_base_asset_withdrawals(
+    portal_contract: &PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
+    alerts: &WatchtowerAlerter,
+    actions: &WatchtowerEthereumActions,
+    watch_config: &EthereumClientWatcher,
+    last_commit_check_block: &u64,
+) {
+    for portal_withdrawal_alert in &watch_config.portal_withdrawal_alerts {
+        if portal_withdrawal_alert.alert_level == AlertLevel::None {
+            continue;
+        }
+
+        let time_frame = portal_withdrawal_alert.time_frame;
+        let amount = match portal_contract.get_base_amount_withdrawn(
+            time_frame,
+            *last_commit_check_block,
+        ).await {
+            Ok(amt) => {
+                println!("Total ETH withdrawn: {:?}", amt);
+                amt
+            },
+            Err(e) => {
+                alerts.alert(
+                    format!("Failed to check base asset withdrawals: {}", e),
+                    portal_withdrawal_alert.alert_level.clone(),
+                ).await;
+                actions.action(
+                    portal_withdrawal_alert.alert_action.clone(),
+                    Some(portal_withdrawal_alert.alert_level.clone()),
+                );
+                continue;
+            }
+        };
+
+        let amount_threshold = get_value(
+            portal_withdrawal_alert.amount,
+            18, // Assuming 18 is the decimal precision for ETH
+        );
+        if amount >= amount_threshold {
+            alerts.alert(
+                format!(
+                    "Base asset withdrawal threshold of {} over {} seconds has been exceeded. Amount withdrawn: {}",
+                    amount_threshold, time_frame, amount
+                ),
+                portal_withdrawal_alert.alert_level.clone(),
+            ).await;
+            actions.action(
+                portal_withdrawal_alert.alert_action.clone(),
+                Some(portal_withdrawal_alert.alert_level.clone()),
+            );
+        }
+    }
+}
+
+async fn check_token_token_deposits(
     gateway_contract: &GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
     alerts: &WatchtowerAlerter,
     actions: &WatchtowerEthereumActions,
@@ -325,6 +379,62 @@ async fn check_erc20_token_deposits(
     }
 }
 
+async fn check_token_withdrawals(
+    gateway_contract: &GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
+    alerts: &WatchtowerAlerter,
+    actions: &WatchtowerEthereumActions,
+    watch_config: &EthereumClientWatcher,
+    last_commit_check_block: u64,
+) {
+    for gateway_withdrawal_alert in &watch_config.gateway_withdrawal_alerts {
+        if gateway_withdrawal_alert.alert_level == AlertLevel::None {
+            continue;
+        }
+
+        let latest_block = last_commit_check_block;
+        let amount = match gateway_contract
+            .get_token_amount_withdrawn(
+                gateway_withdrawal_alert.time_frame,
+                &gateway_withdrawal_alert.token_address,
+                latest_block,
+            )
+            .await
+        {
+            Ok(amt) => amt,
+            Err(e) => {
+                alerts.alert(
+                    format!("Failed to check ERC20 withdrawals: {}", e),
+                    gateway_withdrawal_alert.alert_level.clone(),
+                ).await;
+                actions.action(
+                    gateway_withdrawal_alert.alert_action.clone(),
+                    Some(gateway_withdrawal_alert.alert_level.clone()),
+                );
+                continue;
+            }
+        };
+
+        let amount_threshold = get_value(
+            gateway_withdrawal_alert.amount,
+            gateway_withdrawal_alert.token_decimals,
+        );
+        if amount >= amount_threshold {
+            alerts.alert(
+            format!(
+                    "ERC20 withdrawal threshold of {}{} over {} seconds has been exceeded. Amount withdrawn: {}{}",
+                    amount_threshold, gateway_withdrawal_alert.token_name,
+                    gateway_withdrawal_alert.time_frame, amount, gateway_withdrawal_alert.token_name
+                ),
+                gateway_withdrawal_alert.alert_level.clone(),
+            ).await;
+            actions.action(
+                gateway_withdrawal_alert.alert_action.clone(),
+                Some(gateway_withdrawal_alert.alert_level.clone()),
+            );
+        }
+    }
+}
+
 pub async fn start_ethereum_watcher(
     config: &WatchtowerConfig,
     actions: WatchtowerEthereumActions,
@@ -367,8 +477,14 @@ pub async fn start_ethereum_watcher(
                 check_base_asset_deposits(&portal_contract, &alerts, &actions, &watch_config,
                                           &last_commit_check_block).await;
 
-                check_erc20_token_deposits(&gateway_contract, &alerts,  &actions, &watch_config,
+                check_base_asset_withdrawals(&portal_contract, &alerts, &actions, &watch_config,
+                                             &last_commit_check_block).await;
+
+                check_token_token_deposits(&gateway_contract, &alerts,  &actions, &watch_config,
                                            last_commit_check_block).await;
+
+                check_token_withdrawals(&gateway_contract, &alerts, &actions, &watch_config,
+                                        last_commit_check_block).await;
 
                 thread::sleep(POLL_DURATION);
             }
