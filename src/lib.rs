@@ -87,9 +87,10 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     let alerts = WatchtowerAlerter::new(config, pagerduty_client).map_err(
         |e| anyhow::anyhow!("Failed to setup alerts: {}", e),
     )?;
+    alerts.start_alert_handling_thread();
 
     let actions = WatchtowerEthereumActions::new(
-        alerts.clone(),
+        alerts.get_alert_sender(),
         state_contract.clone(),
         portal_contract.clone(),
         gateway_contract.clone(),
@@ -97,8 +98,8 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
 
     let ethereum_thread = start_ethereum_watcher(
         config,
-        actions.clone(),
-        alerts.clone(),
+        actions.get_action_sender(),
+        alerts.get_alert_sender(),
         fuel_chain.clone(),
         ethereum_chain,
         state_contract,
@@ -107,8 +108,8 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     ).await?;
     let fuel_thread = start_fuel_watcher(
         config,
-        actions.clone(),
-        alerts.clone(),
+        actions.get_action_sender(),
+        alerts.get_alert_sender(),
         fuel_chain,
     ).await?;
 

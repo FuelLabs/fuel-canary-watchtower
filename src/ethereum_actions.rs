@@ -1,6 +1,9 @@
+use std::fmt;
 use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
-use crate::alerter::{AlertLevel, WatchtowerAlerter};
+use crate::alerter::{AlertLevel, WatchtowerAlerter, AlertParams, send_alert};
 use crate::ethereum_watcher::state_contract::StateContract;
 use crate::ethereum_watcher::gateway_contract::GatewayContract;
 use crate::ethereum_watcher::portal_contract::PortalContract;
@@ -25,42 +28,65 @@ pub enum EthereumAction {
     PauseAll,
 }
 
-#[derive(Clone, Debug)]
-pub struct WatchtowerEthereumActions {
-    action_sender: UnboundedSender<ActionParams>,
-}
 
 #[derive(Clone, Debug)]
-struct ActionParams {
+pub struct ActionParams {
     action: EthereumAction,
     alert_level: AlertLevel,
 }
 
-impl WatchtowerEthereumActions {
+impl ActionParams {
+    pub fn new(action: EthereumAction, alert_level: AlertLevel) -> Self {
+        ActionParams { action, alert_level }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct WatchtowerEthereumActions<P: Middleware> {
+    action_sender: UnboundedSender<ActionParams>,
+    alert_sender: UnboundedSender<AlertParams>,
+    state_contract: StateContract<P>,
+    portal_contract: PortalContract<P>,
+    gateway_contract: GatewayContract<P>,
+}
+
+impl <P:Middleware>WatchtowerEthereumActions<P>{
     pub async fn new(
-        alerts: WatchtowerAlerter,
-        state_contract: StateContract<GasEscalatorMiddleware<Provider<Http>>>,
-        portal_contract: PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
-        gateway_contract: GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
+        alert_sender: UnboundedSender<AlertParams>,
+        state_contract: StateContract<P>,
+        portal_contract: PortalContract<P>,
+        gateway_contract: GatewayContract<P>,
     ) -> Result<Self> {
 
-        let (tx, mut rx) = mpsc::unbounded_channel::<ActionParams>();
+        let (
+            action_sender,
+            mut rx,
+        ) = mpsc::unbounded_channel::<ActionParams>();
+
+        // Clone the alert_sender to use inside the async block
+        let alert_sender_clone = alert_sender.clone();
+    
         tokio::spawn(async move {
             while let Some(params) = rx.recv().await {
-                Self::handle_action(
-                    params.action,
-                    &state_contract.clone(),
-                    &portal_contract.clone(),
-                    &gateway_contract.clone(),
-                    &alerts.clone(),
-                    params.alert_level,
-                ).await;
+                // Self::handle_action(
+                //     params.action,
+                //     &state_contract.clone(),
+                //     &portal_contract.clone(),
+                //     &gateway_contract.clone(),
+                //     params.alert_level,
+                // ).await;
             }
-            alerts.alert(String::from(THREAD_CONNECTIONS_ERR), AlertLevel::Error).await;
+            send_alert(&alert_sender_clone, String::from(THREAD_CONNECTIONS_ERR), AlertLevel::Error);
             panic!("{}", THREAD_CONNECTIONS_ERR);
         });
 
-        Ok(WatchtowerEthereumActions { action_sender: tx })
+        Ok(WatchtowerEthereumActions {
+            action_sender,
+            alert_sender,
+            state_contract,
+            portal_contract,
+            gateway_contract,
+        })
     }
 
     async fn pause_contract<F>(
@@ -119,6 +145,10 @@ impl WatchtowerEthereumActions {
         }
     }
 
+    pub fn get_action_sender(&self) -> UnboundedSender<ActionParams> {
+        self.action_sender.clone()
+    }
+
     pub fn action(&self, action: EthereumAction, alert_level: Option<AlertLevel>) {
         let alert_level = match alert_level {
             Some(level) => level,
@@ -126,6 +156,19 @@ impl WatchtowerEthereumActions {
         };
         let params = ActionParams { action, alert_level };
         self.action_sender.send(params).unwrap();
+    }
+}
+
+// Utility function to send actions
+pub fn send_action(
+    action_sender: &UnboundedSender<ActionParams>,
+    action: EthereumAction,
+    alert_level: Option<AlertLevel>,
+) {
+    let alert_level = alert_level.unwrap_or(AlertLevel::Info);
+    let params = ActionParams { action, alert_level };
+    if let Err(e) = action_sender.send(params) {
+        log::error!("Failed to send action: {}", e);
     }
 }
 

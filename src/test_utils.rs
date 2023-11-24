@@ -4,11 +4,15 @@ pub mod test_utils {
     use ethers::prelude::{Provider, Wallet, MockProvider, MockResponse, U64};
     use ethers::signers::Signer;
     use std::sync::Arc;
+    use std::time::Duration;
     use anyhow::Result;
 
+    use crate::WatchtowerConfig;
+    use crate::alerter::WatchtowerAlerter;
     use crate::ethereum_watcher::gateway_contract::GatewayContract;
     use crate::ethereum_watcher::portal_contract::PortalContract;
     use crate::ethereum_watcher::state_contract::StateContract;
+    use crate::pagerduty::{MockHttpPoster, PagerDutyClient};
 
     pub static ETHEREUM_CONNECTION_RETRIES: u64 = 2;
     pub static ETHEREUM_BLOCK_TIME: u64 = 12;
@@ -17,6 +21,7 @@ pub mod test_utils {
     const DEFAULT_PORTAL_CONTRACT_ADDRESS: &str = "0x03f2901Db5723639978deBed3aBA66d4EA03aF73";
     const DEFAULT_STATE_CONTRACT_ADDRESS: &str = "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03";
     const DEFAULT_GATEWAY_CONTRACT_ADDRESS: &str = "0x07cf0FF4fdD5d73C4ea5E96bb2cFaa324A348269";
+    const DEFAULT_PAGERDUTY_API_KEY: &str = "test_api";
     const PAUSED_RESPONSE_HEX: &str = "0x0000000000000000000000000000000000000000000000000000000000000000";
     const READ_ONLY: bool = false;
 
@@ -79,5 +84,26 @@ pub mod test_utils {
         )?;
 
         Ok(state_contract)
+    }
+
+    pub fn setup_watchtower_alerter() -> Result<WatchtowerAlerter, anyhow::Error> {
+        // Create a mock configuration for WatchtowerAlerter
+        let config = WatchtowerConfig {
+            alert_cache_size: 10,
+            alert_cache_expiry: Duration::from_secs(300),
+            watchtower_system_name: "TestSystem".to_string(),
+            // Add other necessary configuration fields if needed
+            ..Default::default()
+        };
+
+        // Create a PagerDutyClient with a mock HTTP poster
+        let mock_http_poster: MockHttpPoster = MockHttpPoster::new();
+        let mock_pagerduty_client = PagerDutyClient::new(
+            DEFAULT_PAGERDUTY_API_KEY.to_string(), 
+            Arc::new(mock_http_poster),
+        );
+
+        // Create and return the WatchtowerAlerter
+        WatchtowerAlerter::new(&config, mock_pagerduty_client)
     }
 }
