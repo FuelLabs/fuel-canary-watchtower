@@ -7,13 +7,27 @@ use ethers::prelude::{abigen, SignerMiddleware};
 use ethers::providers::Middleware;
 use ethers::signers::Wallet;
 use ethers::types::{Filter, H160, H256, U256};
-use std::cmp::max;
 
+use async_trait::async_trait;
+
+use std::cmp::max;
 use std::ops::Mul;
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
 abigen!(FuelERC20Gateway, "./abi/FuelERC20Gateway.json");
+
+#[async_trait]
+#[cfg_attr(test, automock)] 
+pub trait GatewayContractTrait{
+    async fn initialize(&mut self) -> Result<()>;
+    async fn get_token_amount_deposited(&self, timeframe: u32, token_address: &str, latest_block_num: u64) -> Result<U256>;
+    async fn get_token_amount_withdrawn(&self, timeframe: u32, token_address: &str, latest_block_num: u64) -> Result<U256>;
+    async fn pause(&self) -> Result<()>;
+}
 
 #[derive(Clone, Debug)]
 pub struct GatewayContract<P: Middleware>{
@@ -41,8 +55,11 @@ impl <P: Middleware + 'static>GatewayContract<P>{
             read_only,
         })
     }
+}
 
-    pub async fn initialize(&mut self) -> Result<()> {
+#[async_trait]
+impl <P: Middleware + 'static> GatewayContractTrait for GatewayContract<P>{
+    async fn initialize(&mut self) -> Result<()> {
 
         // Create the contract instance
         let client = SignerMiddleware::new(
@@ -63,7 +80,7 @@ impl <P: Middleware + 'static>GatewayContract<P>{
         }
     }
 
-    pub async fn get_token_amount_deposited(
+    async fn get_token_amount_deposited(
         &self,
         timeframe: u32,
         token_address: &str,
@@ -107,7 +124,7 @@ impl <P: Middleware + 'static>GatewayContract<P>{
         Ok(U256::zero())
     }
 
-    pub async fn get_token_amount_withdrawn(
+    async fn get_token_amount_withdrawn(
         &self,
         timeframe: u32,
         token_address: &str,
@@ -151,7 +168,7 @@ impl <P: Middleware + 'static>GatewayContract<P>{
         Ok(U256::zero())
     }
 
-    pub async fn pause(&self) -> Result<()> {
+    async fn pause(&self) -> Result<()> {
         if self.read_only {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
@@ -175,7 +192,10 @@ mod tests {
     use ethers::prelude::*;
     use std::str::FromStr;
 
-    use crate::test_utils::test_utils::{setup_gateway_contract, setup_wallet_and_provider};
+    use crate::{
+        test_utils::test_utils::{setup_gateway_contract, setup_wallet_and_provider},
+        ethereum_watcher::gateway_contract::GatewayContractTrait,
+    };
 
     #[tokio::test]
     async fn new_gateway_contract_creates_instance_correctly() {
@@ -183,7 +203,7 @@ mod tests {
             provider,
             mock,
             wallet,
-    ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
         let gateway_contract = setup_gateway_contract(provider, mock, wallet).expect("Setup failed");
 
         assert!(!gateway_contract.read_only);

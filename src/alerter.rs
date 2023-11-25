@@ -25,11 +25,17 @@ pub enum AlertType {
     FuelBlockProduction,
     FuelPortalWithdraw,
     FuelGatewayWithdraw,
+    EthereumActionsThreadFailed,
+    EthereumWatcherThreadFailed,
     EthereumChainWatching,
     EthereumConnection,
     EthereumBlockProduction,
     EthereumAccountFunds,
     EthereumInvalidStateCommit,
+    EthereumTryPauseContract,
+    EthereumSuccessPauseContract,
+    EthereumFailPauseContract,
+    EthereumTimeoutPauseContract,
     EthereumPortalDeposit,
     EthereumPortalWithdrawal,
     EthereumGatewayDeposit,
@@ -46,6 +52,21 @@ pub struct AlertParams {
 impl AlertParams {
     pub fn new(text: String, level: AlertLevel, alert_type: AlertType) -> Self {
         AlertParams { text, level, alert_type }
+    }
+
+    #[cfg(test)]
+    pub fn is_text_equal(&self, other_text: &str) -> bool {
+        self.text == other_text
+    }
+
+    #[cfg(test)]
+    pub fn is_level_equal(&self, other_level: AlertLevel) -> bool {
+        self.level == other_level
+    }
+
+    #[cfg(test)]
+    pub fn is_type_equal(&self, other_type: AlertType) -> bool {
+        self.alert_type == other_type
     }
 }
 
@@ -171,10 +192,10 @@ impl WatchtowerAlerter{
 pub fn send_alert(
     alert_sender: &UnboundedSender<AlertParams>,
     text: String,
-    level: AlertLevel,
+    alert_level: AlertLevel,
     alert_type: AlertType,
 ) {
-    if let Err(e) = alert_sender.send(AlertParams::new(text, level, alert_type)) {
+    if let Err(e) = alert_sender.send(AlertParams::new(text, alert_level, alert_type)) {
         log::error!("Failed to send alert: {}", e);
     }
 }

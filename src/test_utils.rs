@@ -43,14 +43,15 @@ pub mod test_utils {
         provider: Arc<Provider<MockProvider>>,
         mock: Arc<MockProvider>,
         wallet: Wallet<SigningKey>,
-    ) -> Result<PortalContract<Provider<MockProvider>>> {
+    ) -> Result<PortalContract<Provider<MockProvider>>, Box<dyn std::error::Error>> {
         setup_mock_response(&mock);
-        let portal_contract = PortalContract::new(
+        let portal_contract: PortalContract<Provider<MockProvider>> = PortalContract::new(
             DEFAULT_PORTAL_CONTRACT_ADDRESS.to_string(),
             READ_ONLY,
             provider,
             wallet,
         )?;
+
         Ok(portal_contract)
     }
 

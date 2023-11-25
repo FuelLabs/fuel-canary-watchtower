@@ -27,10 +27,20 @@ use pagerduty::PagerDutyClient;
 use reqwest::Client;
 use tokio::task::JoinHandle;
 use crate::ethereum_watcher::{
-    gateway_contract::GatewayContract,
-    portal_contract::PortalContract,
-    state_contract::StateContract,
+    gateway_contract::{
+        GatewayContract,
+        GatewayContractTrait,
+    },
+    portal_contract::{
+        PortalContract,
+        PortalContractTrait,
+    },
+    state_contract::{
+        StateContract,
+        StateContractTrait,
+    }
 };
+use tokio::sync::Mutex;
 
 use crate::fuel_watcher::fuel_utils::setup_fuel_provider;
 use crate::fuel_watcher::fuel_chain::FuelChain;
@@ -77,13 +87,20 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     portal_contract.initialize().await?;
     gateway_contract.initialize().await?;
 
+    let arc_state_contract = Arc::new(Mutex::new(state_contract));
+    let arc_portal_contract = Arc::new(Mutex::new(portal_contract));
+    let arc_gateway_contract = Arc::new(Mutex::new(gateway_contract));
+
     // Create the chains.
     let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
     let ethereum_chain = EthereumChain::new(
         ether_provider,
     ).await?;
 
-    let pagerduty_client = PagerDutyClient::new(config.pagerduty_api_key.clone(), Arc::new(Client::new()));
+    let pagerduty_client = PagerDutyClient::new(
+        config.pagerduty_api_key.clone(),
+         Arc::new(Client::new()),
+    );
     let alerts = WatchtowerAlerter::new(config, pagerduty_client).map_err(
         |e| anyhow::anyhow!("Failed to setup alerts: {}", e),
     )?;
@@ -91,50 +108,53 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
 
     let actions = WatchtowerEthereumActions::new(
         alerts.get_alert_sender(),
-        state_contract.clone(),
-        portal_contract.clone(),
-        gateway_contract.clone(),
-    ).await.map_err(|e| anyhow::anyhow!("Failed to setup actions: {}", e))?;
+        arc_state_contract.clone(),
+        arc_portal_contract.clone(),
+        arc_gateway_contract.clone(),
+    );
+    actions.start_action_handling_thread();
 
-    let ethereum_thread = start_ethereum_watcher(
-        config,
-        actions.get_action_sender(),
-        alerts.get_alert_sender(),
-        fuel_chain.clone(),
-        ethereum_chain,
-        state_contract,
-        portal_contract,
-        gateway_contract,
-    ).await?;
-    let fuel_thread = start_fuel_watcher(
-        config,
-        actions.get_action_sender(),
-        alerts.get_alert_sender(),
-        fuel_chain,
-    ).await?;
+    // let ethereum_thread = start_ethereum_watcher(
+    //     config,
+    //     actions.get_action_sender(),
+    //     alerts.get_alert_sender(),
+    //     fuel_chain.clone(),
+    //     ethereum_chain,
+    //     state_contract,
+    //     portal_contract,
+    //     gateway_contract,
+    // ).await?;
+    // let fuel_thread = start_fuel_watcher(
+    //     config,
+    //     actions.get_action_sender(),
+    //     alerts.get_alert_sender(),
+    //     fuel_chain,
+    // ).await?;
 
-    handle_watcher_threads(fuel_thread, ethereum_thread, &alerts).await
+    // handle_watcher_threads(fuel_thread, ethereum_thread, &alerts).await
+    Ok(())
 }
 
 async fn handle_watcher_threads(
     fuel_thread: JoinHandle<()>,
     ethereum_thread: JoinHandle<()>,
-    alerts: &WatchtowerAlerter,
+    _alerts: &WatchtowerAlerter,
 ) -> Result<()> {
 
     if let Err(e) = ethereum_thread.await {
-        alerts.alert(
-            String::from("Ethereum watcher thread failed."),
-            AlertLevel::Error,
-        ).await;
+        // alerts.alert(
+        //     String::from("Ethereum watcher thread failed."),
+        //     AlertLevel::Error,
+        //     AlertType::EthereumWatcherThreadFailed,
+        // ).await;
         return Err(anyhow::anyhow!("Ethereum watcher thread failed: {}", e));
     }
 
     if let Err(e) = fuel_thread.await {
-        alerts.alert(
-            String::from("Fuel watcher thread failed."),
-            AlertLevel::Error,
-        ).await;
+        // alerts.alert(
+        //     String::from("Fuel watcher thread failed."),
+        //     AlertLevel::Error,
+        // ).await;
         return Err(anyhow::anyhow!("Fuel watcher thread failed: {}", e));
     }
 

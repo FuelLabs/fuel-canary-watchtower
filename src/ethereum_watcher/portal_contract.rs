@@ -7,13 +7,27 @@ use ethers::prelude::{abigen, SignerMiddleware};
 use ethers::providers::Middleware;
 use ethers::signers::Wallet;
 use ethers::types::{Filter, H160, U256};
-use std::cmp::max;
 
+use async_trait::async_trait;
+
+use std::cmp::max;
 use std::ops::Mul;
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
 abigen!(FuelMessagePortal, "./abi/FuelMessagePortal.json");
+
+#[async_trait]
+#[cfg_attr(test, automock)] 
+pub trait PortalContractTrait{
+    async fn initialize(&mut self) -> Result<()>;
+    async fn get_base_amount_deposited(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>;
+    async fn get_base_amount_withdrawn(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>;
+    async fn pause(&self) -> Result<()>;
+}
 
 #[derive(Clone, Debug)]
 pub struct PortalContract<P: Middleware>{
@@ -41,8 +55,11 @@ impl <P: Middleware + 'static>PortalContract<P>{
             read_only,
         })
     }
+}
 
-    pub async fn initialize(&mut self) -> Result<()> {
+#[async_trait]
+impl <P: Middleware + 'static> PortalContractTrait for PortalContract<P>{
+    async fn initialize(&mut self) -> Result<()> {
 
         // Create the contract instance
         let client = SignerMiddleware::new(
@@ -63,7 +80,7 @@ impl <P: Middleware + 'static>PortalContract<P>{
         }
     }
 
-    pub async fn get_base_amount_deposited(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>{
+    async fn get_base_amount_deposited(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>{
         let block_offset = timeframe as u64 / ETHEREUM_BLOCK_TIME;
         let start_block = max(latest_block_num, block_offset) - block_offset;
 
@@ -97,7 +114,7 @@ impl <P: Middleware + 'static>PortalContract<P>{
         Ok(U256::zero())
     }
 
-    pub async fn get_base_amount_withdrawn(
+    async fn get_base_amount_withdrawn(
         &self,
         timeframe: u32,
         latest_block_num: u64,
@@ -135,7 +152,7 @@ impl <P: Middleware + 'static>PortalContract<P>{
         Ok(U256::zero())
     }
 
-    pub async fn pause(&self) -> Result<()> {
+    async fn pause(&self) -> Result<()> {
         if self.read_only {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
@@ -157,7 +174,10 @@ impl <P: Middleware + 'static>PortalContract<P>{
 mod tests {
     use ethers::abi::Token;
     use ethers::prelude::*;
-    use crate::test_utils::test_utils::{setup_portal_contract, setup_wallet_and_provider};
+    use crate::{
+        test_utils::test_utils::{setup_portal_contract, setup_wallet_and_provider},
+        ethereum_watcher::portal_contract::PortalContractTrait,
+    };
 
     #[tokio::test]
     async fn new_portal_contract_test() {

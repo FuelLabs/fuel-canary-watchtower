@@ -10,10 +10,23 @@ use ethers::signers::Wallet;
 use ethers::types::{Filter, H160};
 use fuels::tx::Bytes32;
 
+use async_trait::async_trait;
+
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
 abigen!(FuelChainState, "./abi/FuelChainState.json");
+
+#[async_trait]
+#[cfg_attr(test, automock)] 
+pub trait StateContractTrait{
+    async fn initialize(&mut self) -> Result<()>;
+    async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>>;
+    async fn pause(&self) -> Result<()>;
+}
 
 #[derive(Clone, Debug)]
 pub struct StateContract<P: Middleware>{
@@ -24,7 +37,7 @@ pub struct StateContract<P: Middleware>{
     read_only: bool,
 }
 
-impl <P: Middleware + 'static>StateContract<P>{   
+impl<P: Middleware + 'static> StateContract<P> {
     pub fn new(
         state_contract_address: String,
         read_only: bool,
@@ -41,10 +54,11 @@ impl <P: Middleware + 'static>StateContract<P>{
             read_only,
         })
     }
+}
 
-    pub async fn initialize(&mut self) -> Result<()> {
-        
-        // Create the contract instance
+#[async_trait]
+impl <P: Middleware + 'static> StateContractTrait for StateContract<P>{   
+    async fn initialize(&mut self) -> Result<()> {
         let client = SignerMiddleware::new(
             self.provider.clone(),
              self.wallet.clone(),
@@ -64,7 +78,7 @@ impl <P: Middleware + 'static>StateContract<P>{
         }
     }
 
-    pub async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>> {
+    async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>> {
         //CommitSubmitted(uint256 indexed commitHeight, bytes32 blockHash)
         let filter = Filter::new()
             .address(self.address)
@@ -84,7 +98,7 @@ impl <P: Middleware + 'static>StateContract<P>{
         Ok(vec![])
     }
 
-    pub async fn pause(&self) -> Result<()> {
+    async fn pause(&self) -> Result<()> {
         if self.read_only {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
@@ -106,7 +120,10 @@ impl <P: Middleware + 'static>StateContract<P>{
 #[cfg(test)]
 mod tests {
     use ethers::prelude::*;
-    use crate::test_utils::test_utils::{setup_state_contract, setup_wallet_and_provider};
+    use crate::{
+        test_utils::test_utils::{setup_state_contract, setup_wallet_and_provider},
+        ethereum_watcher::state_contract::StateContractTrait,
+    };
 
     #[tokio::test]
     async fn new_state_contract_test() {

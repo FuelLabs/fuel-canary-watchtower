@@ -18,6 +18,8 @@ use ethers::prelude::*;
 use crate::config::EthereumClientWatcher;
 use crate::ethereum_watcher::ethereum_utils::get_value;
 
+use self::state_contract::StateContractTrait;
+
 pub mod state_contract;
 pub mod ethereum_chain;
 pub mod gateway_contract;
@@ -45,6 +47,7 @@ async fn check_chain_connection(
             &alert_sender,
             format!("Failed to check ethereum connection: {}", e),
             watch_config.connection_alert.alert_level.clone(),
+            AlertType::EthereumConnection,
         );
         send_action(
             &action_sender,
@@ -72,6 +75,7 @@ async fn check_block_production(
                 &alert_sender,
                 format!("Failed to check ethereum block production: {}", e),
                 watch_config.block_production_alert.alert_level.clone(),
+                AlertType::EthereumBlockProduction,
             );
             send_action(
                 &action_sender,
@@ -90,6 +94,7 @@ async fn check_block_production(
                 watch_config.block_production_alert.max_block_time, seconds_since_last_block
             ),
             watch_config.block_production_alert.alert_level.clone(),
+            AlertType::EthereumBlockProduction,
         );
         send_action(
             &action_sender,
@@ -125,6 +130,7 @@ async fn check_account_balance(
                 &alert_sender,
                 format!("Failed to check ethereum account funds: {}", e),
                 watch_config.account_funds_alert.alert_level.clone(),
+                AlertType::EthereumAccountFunds,
             );
             send_action(
                 &action_sender,
@@ -147,6 +153,7 @@ async fn check_account_balance(
                 address, retrieved_balance,
             ),
             watch_config.account_funds_alert.alert_level.clone(),
+            AlertType::EthereumAccountFunds,
         );
         send_action(
             &action_sender,
@@ -179,6 +186,7 @@ async fn check_invalid_commits(
                 &alert_sender,
                 format!("Failed to check state contract commits: {e}"),
                 watch_config.invalid_state_commit_alert.alert_level.clone(),
+                AlertType::EthereumInvalidStateCommit,
             );
             send_action(
                 &action_sender,
@@ -199,6 +207,7 @@ async fn check_invalid_commits(
                             "An invalid commit was made on the state contract. Hash: {}", hash,
                         ),
                         watch_config.invalid_state_commit_alert.alert_level.clone(),
+                        AlertType::EthereumInvalidStateCommit,
                     );
                     send_action(
                         &action_sender,
@@ -212,6 +221,7 @@ async fn check_invalid_commits(
                     &alert_sender,
                     format!("Failed to check state contract commits: {}", e),
                     watch_config.invalid_state_commit_alert.alert_level.clone(),
+                    AlertType::EthereumInvalidStateCommit,
                 );
                 send_action(
                     &action_sender,
