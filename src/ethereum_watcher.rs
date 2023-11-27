@@ -7,10 +7,10 @@ use crate::WatchtowerConfig;
 use anyhow::Result;
 use ethereum_chain::EthereumChain;
 use state_contract::StateContract;
-use gateway_contract::GatewayContract;
-use portal_contract::PortalContract;
+use tokio::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 use std::cmp::max;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -18,7 +18,9 @@ use ethers::prelude::*;
 use crate::config::EthereumClientWatcher;
 use crate::ethereum_watcher::ethereum_utils::get_value;
 
-use self::state_contract::StateContractTrait;
+use gateway_contract::GatewayContractTrait;
+use portal_contract::PortalContractTrait;
+use state_contract::StateContractTrait;
 
 pub mod state_contract;
 pub mod ethereum_chain;
@@ -469,9 +471,9 @@ pub async fn start_ethereum_watcher(
     alert_sender: UnboundedSender<AlertParams>,
     fuel_chain: FuelChain,
     ethereum_chain: EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
-    state_contract: StateContract<GasEscalatorMiddleware<Provider<Http>>>,
-    portal_contract: PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
-    gateway_contract: GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
+    state_contract: Arc<Mutex<dyn StateContractTrait + Send>>,
+    portal_contract: Arc<Mutex<dyn PortalContractTrait + Send>>,
+    gateway_contract: Arc<Mutex<dyn GatewayContractTrait + Send>>,
 ) -> Result<JoinHandle<()>> {
 
     let watch_config = config.ethereum_client_watcher.clone();
