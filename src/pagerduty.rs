@@ -9,7 +9,7 @@ use mockall::{automock, predicate::*};
 
 // Define a trait for HTTP poster functionality
 #[async_trait]
-#[cfg_attr(test, automock)] 
+#[cfg_attr(test, automock)]
 pub trait HttpPoster: Sync + Send {
     async fn post(&self, url: &str, body: &PagerDutyPayload) -> Result<(), ReqwestError>;
 }
