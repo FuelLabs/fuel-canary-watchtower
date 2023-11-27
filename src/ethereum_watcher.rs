@@ -1,20 +1,17 @@
-use crate::alerter::{AlertLevel, WatchtowerAlerter, AlertParams, send_alert};
-use crate::ethereum_actions::{WatchtowerEthereumActions, ActionParams, send_action};
-use crate::fuel_watcher::fuel_chain::FuelChain;
+use crate::alerter::{AlertLevel, AlertParams, send_alert};
+use crate::ethereum_actions::{ActionParams, send_action};
+use crate::fuel_watcher::fuel_chain::{FuelChain, FuelChainTrait};
 use crate::WatchtowerConfig;
 
 
 use anyhow::Result;
-use ethereum_chain::EthereumChain;
-use state_contract::StateContract;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc::UnboundedSender;
 use std::cmp::max;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use ethers::prelude::*;
+
 use crate::config::EthereumClientWatcher;
 use crate::ethereum_watcher::ethereum_utils::get_value;
 
@@ -263,11 +260,7 @@ async fn check_base_asset_deposits(
             Err(e) => {
                 send_alert(
                     &alert_sender,
-                        format!(
-                            "Failed to check portal contract for deposit token {} at address {}",
-                            portal_deposit_alert.token_name, 
-                            portal_deposit_alert.token_address,
-                        ),
+                        String::from("Failed to check portal contract for base asset deposits"),
                     format!("Failed to check base asset deposits: {}", e),
                     portal_deposit_alert.alert_level.clone(),
                 );
@@ -282,16 +275,12 @@ async fn check_base_asset_deposits(
 
         let amount_threshold = get_value(
             portal_deposit_alert.amount,
-            18,
+            portal_deposit_alert.token_decimals,
         );
         if amount >= amount_threshold {
             send_alert(
                 &alert_sender,
-                format!(
-                        "token {} at address {} is above deposit threshold",
-                        portal_deposit_alert.token_name, 
-                        portal_deposit_alert.token_address,
-                    ),
+                    String::from("Base asset is above deposit threshold."),
                 format!(
                     "Base asset deposit threshold of {} over {} seconds has been reached. Amount deposited: {}",
                     amount_threshold, time_frame, amount
@@ -328,11 +317,7 @@ async fn check_base_asset_withdrawals(
             Err(e) => {
                 send_alert(
                     &alert_sender,
-                    format!(
-                        "Failed to check portal contract for withdraw token {} at address {}",
-                        portal_withdrawal_alert.token_name, 
-                        portal_withdrawal_alert.token_address,
-                    ),
+                    String::from("Failed to check portal contract for base asset withdrawals"),
                     format!("Failed to check base asset withdrawals: {}", e),
                     portal_withdrawal_alert.alert_level.clone(),
                 );
@@ -347,16 +332,12 @@ async fn check_base_asset_withdrawals(
 
         let amount_threshold = get_value(
             portal_withdrawal_alert.amount,
-            18, // Assuming 18 is the decimal precision for ETH
+            portal_withdrawal_alert.token_decimals,
         );
         if amount >= amount_threshold {
             send_alert(
                 &alert_sender,
-                format!(
-                        "token {} at address {} is above deposit threshold",
-                        portal_withdrawal_alert.token_name, 
-                        portal_withdrawal_alert.token_address,
-                    ),
+                String::from("Base asset is above withdrawal threshold."),
                 format!(
                     "Base asset withdrawal threshold of {} over {} seconds has been exceeded. Amount withdrawn: {}",
                     amount_threshold, time_frame, amount

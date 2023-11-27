@@ -16,13 +16,13 @@ use fuels::types::chain_info::ChainInfo;
 use fuels::types::tx_status::TxStatus;
 use fuels::tx::Receipt;
 
+use async_trait::async_trait;
+
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Clone, Debug)]
-pub struct FuelChain {
-    provider: Arc<Provider>,
-}
+#[cfg(test)]
+use mockall::{automock, predicate::*};
 
 #[derive(Parameterize, Tokenizable, Debug)]
 pub struct WithdrawalEvent {
@@ -31,12 +31,33 @@ pub struct WithdrawalEvent {
     to: Bits256,
 }
 
+#[async_trait]
+#[cfg_attr(test, automock)] 
+pub trait FuelChainTrait: Send + Sync {
+    async fn check_connection(&self) -> Result<()>;
+    async fn get_seconds_since_last_block(&self) -> Result<u32>;
+    async fn fetch_chain_info(&self) -> Result<ChainInfo>;
+    async fn get_base_amount_withdrawn(&self, timeframe: u32) -> Result<u64>;
+    async fn get_base_amount_withdrawn_from_tx(&self, tx_id: &Bytes32) -> Result<u64>;
+    async fn get_token_amount_withdrawn(&self, timeframe: u32, token_contract_id: &str) -> Result<u64>;
+    async fn get_token_amount_withdrawn_from_tx(&self, tx_id: &Bytes32, token_contract_id: &str) -> Result<u64>;
+    async fn verify_block_commit(&self, block_hash: &Bytes32) -> Result<bool>;
+}
+
+#[derive(Clone, Debug)]
+pub struct FuelChain {
+    provider: Arc<Provider>,
+}
+
 impl FuelChain {
     pub fn new(provider: Arc<Provider>) -> Result<Self> {
         Ok(FuelChain { provider })
     }
+}
 
-    pub async fn check_connection(&self) -> Result<()> {
+#[async_trait]
+impl FuelChainTrait for FuelChain {
+    async fn check_connection(&self) -> Result<()> {
         for _ in 0..FUEL_CONNECTION_RETRIES {
             if self.provider.chain_info().await.is_ok() {
                 return Ok(());
@@ -47,7 +68,7 @@ impl FuelChain {
         )
     }
 
-    pub async fn get_seconds_since_last_block(&self) -> Result<u32> {
+    async fn get_seconds_since_last_block(&self) -> Result<u32> {
         let chain_info = self.fetch_chain_info().await?;
 
         let latest_block_time = chain_info.latest_block.header.time.ok_or_else(
@@ -74,7 +95,7 @@ impl FuelChain {
         )
     }
 
-    pub async fn get_base_amount_withdrawn(&self, timeframe: u32) -> Result<u64> {
+    async fn get_base_amount_withdrawn(&self, timeframe: u32) -> Result<u64> {
         let num_blocks = match usize::try_from(timeframe as u64 / FUEL_BLOCK_TIME) {
             Ok(val) => val,
             Err(e) => return Err(anyhow::anyhow!("{e}")),
@@ -110,7 +131,7 @@ impl FuelChain {
         Ok(0)
     }
 
-    pub async fn get_base_amount_withdrawn_from_tx(&self, tx_id: &Bytes32) -> Result<u64> {
+    async fn get_base_amount_withdrawn_from_tx(&self, tx_id: &Bytes32) -> Result<u64> {
 
         // Query the transaction from the chain within a certain number of tries.
         let mut tx_response = None;
@@ -157,7 +178,7 @@ impl FuelChain {
         Ok(total_amount)
     }
 
-    pub async fn get_token_amount_withdrawn(
+    async fn get_token_amount_withdrawn(
         &self, timeframe: u32, token_contract_id: &str
     ) -> Result<u64> {
         let num_blocks = match usize::try_from(timeframe as u64 / FUEL_BLOCK_TIME) {
@@ -196,7 +217,7 @@ impl FuelChain {
         Ok(0)
     }
 
-    pub async fn get_token_amount_withdrawn_from_tx(
+    async fn get_token_amount_withdrawn_from_tx(
         &self, tx_id: &Bytes32, token_contract_id: &str,
     ) -> Result<u64> {
 
@@ -257,7 +278,7 @@ impl FuelChain {
         Ok(total_amount)
     }
 
-    pub async fn verify_block_commit(&self, block_hash: &Bytes32) -> Result<bool> {
+    async fn verify_block_commit(&self, block_hash: &Bytes32) -> Result<bool> {
         for i in 0..FUEL_CONNECTION_RETRIES {
             match self.provider.block(block_hash).await {
                 Ok(Some(_)) => {

@@ -3,6 +3,7 @@ use super::ETHEREUM_CONNECTION_RETRIES;
 use anyhow::{Result, anyhow};
 use ethers::providers::Middleware;
 use ethers::types::Address;
+
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Arc;
