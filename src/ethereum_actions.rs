@@ -145,7 +145,7 @@ impl WatchtowerEthereumActions{
                 // This is the case where pause_future completed, but resulted in an error.
                 send_alert(
                     &alert_sender,
-                    format!("Failed to paused {} contract.", contract_name),
+                    format!("Failed to pause {} contract.", contract_name),
                     e.to_string(),
                     alert_level,
                 );
@@ -411,7 +411,7 @@ mod tests {
         ).await;
         assert_alert_received(
             &mut alert_receiver,
-            "Mock pause error",
+            "Failed to pause state contract.",
             "Mock pause error",
             AlertLevel::Error,
         ).await;
