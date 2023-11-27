@@ -1,10 +1,10 @@
-use crate::alerter::{AlertLevel, WatchtowerAlerter, AlertParams, send_alert};
-use crate::ethereum_actions::{WatchtowerEthereumActions, ActionParams, send_action};
+use crate::alerter::{AlertLevel, AlertParams, send_alert};
+use crate::ethereum_actions::{ActionParams, send_action};
 use crate::WatchtowerConfig;
 
 
 use anyhow::Result;
-use fuel_chain::{FuelChain, FuelChainTrait};
+use fuel_chain::{FuelChainTrait};
 use tokio::sync::mpsc::UnboundedSender;
 
 use std::sync::Arc;

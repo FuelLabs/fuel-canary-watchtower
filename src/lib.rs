@@ -99,11 +99,7 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     let arc_ethereum_chain = Arc::new(ethereum_chain) as Arc<dyn EthereumChainTrait>;
     let arc_fuel_chain = Arc::new(fuel_chain) as Arc<dyn FuelChainTrait>;
 
-    let pagerduty_client: Option<PagerDutyClient> = if let Some(api_key) = config.pagerduty_api_key.clone() {
-        Some(PagerDutyClient::new(api_key, Arc::new(Client::new())))
-    } else {
-        None
-    };
+    let pagerduty_client: Option<PagerDutyClient> = config.pagerduty_api_key.clone().map(|api_key| PagerDutyClient::new(api_key, Arc::new(Client::new())));
 
     let alerts = WatchtowerAlerter::new(config, pagerduty_client).map_err(
         |e| anyhow::anyhow!("Failed to setup alerts: {}", e),

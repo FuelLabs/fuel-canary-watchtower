@@ -1,16 +1,16 @@
 use std::fmt;
 use std::future::Future;
-use std::pin::Pin;
+
 use std::sync::Arc;
 use std::time::Duration;
-use crate::alerter::{AlertLevel, WatchtowerAlerter, AlertParams, send_alert};
-use crate::ethereum_watcher::state_contract::{StateContract, StateContractTrait};
-use crate::ethereum_watcher::gateway_contract::{GatewayContract, GatewayContractTrait};
-use crate::ethereum_watcher::portal_contract::{PortalContract, PortalContractTrait};
+use crate::alerter::{AlertLevel, AlertParams, send_alert};
+use crate::ethereum_watcher::state_contract::{StateContractTrait};
+use crate::ethereum_watcher::gateway_contract::{GatewayContractTrait};
+use crate::ethereum_watcher::portal_contract::{PortalContractTrait};
 
 
 use anyhow::Result;
-use ethers::providers::{Http, Provider};
+
 use serde::Deserialize;
 use tokio::sync::mpsc::{self, UnboundedSender, UnboundedReceiver};
 use ethers::prelude::*;
@@ -223,6 +223,8 @@ pub fn send_action(
 
 #[cfg(test)]
 mod tests {
+    use std::pin::Pin;
+
     use super::*;
     use tokio::sync::mpsc;
 

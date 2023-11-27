@@ -1,6 +1,6 @@
 use crate::alerter::{AlertLevel, AlertParams, send_alert};
 use crate::ethereum_actions::{ActionParams, send_action};
-use crate::fuel_watcher::fuel_chain::{FuelChain, FuelChainTrait};
+use crate::fuel_watcher::fuel_chain::{FuelChainTrait};
 use crate::WatchtowerConfig;
 
 
