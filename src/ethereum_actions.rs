@@ -242,9 +242,9 @@ mod tests {
         expected_level: AlertLevel,
     ) {
         if let Some(alert) = alert_receiver.recv().await {
-            assert_eq!(alert.is_name_equal(expected_name), true);
-            assert_eq!(alert.is_description_equal(expected_description), true);
-            assert_eq!(alert.is_level_equal(expected_level), true);
+            assert!(alert.is_name_equal(expected_name));
+            assert!(alert.is_description_equal(expected_description));
+            assert!(alert.is_level_equal(expected_level));
         } else {
             panic!("Expected alert not received");
         }
