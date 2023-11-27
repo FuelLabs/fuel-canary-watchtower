@@ -3,7 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-use crate::alerter::{AlertLevel, WatchtowerAlerter, AlertParams, send_alert, AlertType};
+use crate::alerter::{AlertLevel, WatchtowerAlerter, AlertParams, send_alert};
 use crate::ethereum_watcher::state_contract::{StateContract, StateContractTrait};
 use crate::ethereum_watcher::gateway_contract::{GatewayContract, GatewayContractTrait};
 use crate::ethereum_watcher::portal_contract::{PortalContract, PortalContractTrait};
@@ -106,8 +106,8 @@ impl WatchtowerEthereumActions{
             send_alert(
                 &alert_sender,
                 String::from(THREAD_CONNECTIONS_ERR),
+                String::from(THREAD_CONNECTIONS_ERR),
                 AlertLevel::Error,
-                AlertType::EthereumActionsThreadFailed,
             );
             panic!("{}", THREAD_CONNECTIONS_ERR);
         });
@@ -125,8 +125,8 @@ impl WatchtowerEthereumActions{
         send_alert(
             &alert_sender,
             format!("Pausing {} contract.", contract_name),
+            format!("Pausing {} contract.", contract_name),
              AlertLevel::Info,
-            AlertType::EthereumTryPauseContract,
         );
 
         // Set a duration for the timeout
@@ -137,17 +137,17 @@ impl WatchtowerEthereumActions{
                 send_alert(
                     &alert_sender,
                     format!("Successfully paused {} contract.", contract_name),
+                    format!("Successfully paused {} contract.", contract_name),
                      AlertLevel::Info,
-                    AlertType::EthereumSuccessPauseContract,
                 );
             },
             Ok(Err(e)) => {
                 // This is the case where pause_future completed, but resulted in an error.
                 send_alert(
                     &alert_sender,
+                    format!("Failed to paused {} contract.", contract_name),
                     e.to_string(),
                     alert_level,
-                    AlertType::EthereumFailPauseContract,
                 );
             },
             Err(_) => {
@@ -155,8 +155,8 @@ impl WatchtowerEthereumActions{
                 send_alert(
                     &alert_sender,
                     format!("Timeout while pausing {} contract.", contract_name),
+                    format!("Timeout while pausing {} contract.", contract_name),
                     alert_level,
-                    AlertType::EthereumTimeoutPauseContract,
                 );
             }
         }
@@ -241,19 +241,20 @@ mod tests {
     // Util to help tests
     async fn assert_alert_received(
         alert_receiver: &mut UnboundedReceiver<AlertParams>,
-        expected_text: &str,
+        expected_name: &str,
+        expected_description: &str,
         expected_level: AlertLevel,
-        expected_type: AlertType,
     ) {
         if let Some(alert) = alert_receiver.recv().await {
             println!("{:?}", alert);
-            assert_eq!(alert.is_text_equal(expected_text), true);
+            assert_eq!(alert.is_name_equal(expected_name), true);
+            assert_eq!(alert.is_description_equal(expected_description), true);
             assert_eq!(alert.is_level_equal(expected_level), true);
-            assert_eq!(alert.is_type_equal(expected_type), true);
         } else {
-            panic!("Expected alert '{}' not received", expected_text);
+            panic!("Expected alert not received");
         }
-    }    
+    }
+
     #[tokio::test]
     async fn test_handle_pause_state_action() {
         let (
@@ -295,14 +296,14 @@ mod tests {
         assert_alert_received(
             &mut alert_receiver,
              "Pausing state contract.", 
+             "Pausing state contract.", 
              AlertLevel::Info,
-              AlertType::EthereumTryPauseContract,
         ).await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused state contract.",
+            "Successfully paused state contract.",
             AlertLevel::Info,
-            AlertType::EthereumSuccessPauseContract,
         ).await;
     }
 
@@ -353,15 +354,15 @@ mod tests {
     
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing state contract.", 
+             "Pausing state contract.",
+             "Pausing state contract.",
              AlertLevel::Info,
-              AlertType::EthereumTryPauseContract,
         ).await;
         assert_alert_received(
             &mut alert_receiver,
             "Timeout while pausing state contract.",
+            "Timeout while pausing state contract.",
             AlertLevel::Error,
-            AlertType::EthereumTimeoutPauseContract,
         ).await;
     }    
 
@@ -404,15 +405,15 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing state contract.", 
+             "Pausing state contract.",
+             "Pausing state contract.",
              AlertLevel::Info,
-              AlertType::EthereumTryPauseContract,
         ).await;
         assert_alert_received(
             &mut alert_receiver,
             "Mock pause error",
+            "Mock pause error",
             AlertLevel::Error,
-            AlertType::EthereumFailPauseContract,
         ).await;
     }
 
@@ -454,15 +455,15 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing gateway contract.", 
+             "Pausing gateway contract.",
+             "Pausing gateway contract.",
              AlertLevel::Info,
-              AlertType::EthereumTryPauseContract,
         ).await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused gateway contract.",
+            "Successfully paused gateway contract.",
             AlertLevel::Info,
-            AlertType::EthereumSuccessPauseContract,
         ).await;
     }
 
@@ -503,15 +504,15 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing portal contract.", 
+             "Pausing portal contract.",
+             "Pausing portal contract.",
              AlertLevel::Info,
-              AlertType::EthereumTryPauseContract,
         ).await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused portal contract.",
+            "Successfully paused portal contract.",
             AlertLevel::Info,
-            AlertType::EthereumSuccessPauseContract,
         ).await;
     }
 
@@ -552,41 +553,41 @@ mod tests {
         // Verify alerts for pausing each contract
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing state contract.", 
+             "Pausing state contract.",
+             "Pausing state contract.",
              AlertLevel::Info,
-              AlertType::EthereumTryPauseContract,
         ).await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused state contract.",
+            "Successfully paused state contract.",
             AlertLevel::Info,
-            AlertType::EthereumSuccessPauseContract,
         ).await;
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing gateway contract.", 
+             "Pausing gateway contract.",
+             "Pausing gateway contract.",
              AlertLevel::Info,
-              AlertType::EthereumTryPauseContract,
         ).await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused gateway contract.",
+            "Successfully paused gateway contract.",
             AlertLevel::Info,
-            AlertType::EthereumSuccessPauseContract,
         ).await;
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing portal contract.", 
+             "Pausing portal contract.",
+             "Pausing portal contract.",
              AlertLevel::Info,
-              AlertType::EthereumTryPauseContract,
         ).await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused portal contract.",
+            "Successfully paused portal contract.",
             AlertLevel::Info,
-            AlertType::EthereumSuccessPauseContract,
         ).await;
     }
 }

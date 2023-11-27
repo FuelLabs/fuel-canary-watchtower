@@ -18,55 +18,31 @@ pub enum AlertLevel {
     Error,
 }
 
-// We define alert types as we cache alerts based on these types.
-#[derive(Hash, Deserialize, Clone, PartialEq, Eq, Debug)]
-pub enum AlertType {
-    FuelConnection,
-    FuelBlockProduction,
-    FuelPortalWithdraw,
-    FuelGatewayWithdraw,
-    EthereumActionsThreadFailed,
-    EthereumWatcherThreadFailed,
-    EthereumChainWatching,
-    EthereumConnection,
-    EthereumBlockProduction,
-    EthereumAccountFunds,
-    EthereumInvalidStateCommit,
-    EthereumTryPauseContract,
-    EthereumSuccessPauseContract,
-    EthereumFailPauseContract,
-    EthereumTimeoutPauseContract,
-    EthereumPortalDeposit,
-    EthereumPortalWithdrawal,
-    EthereumGatewayDeposit,
-    EthereumGatewayWithdrawal,
-}
-
 #[derive(Clone, Debug)]
 pub struct AlertParams {
-    text: String,
-    level: AlertLevel,
-    alert_type: AlertType,
+    name: String,
+    description: String,
+    alert_level: AlertLevel,
 }
 
 impl AlertParams {
-    pub fn new(text: String, level: AlertLevel, alert_type: AlertType) -> Self {
-        AlertParams { text, level, alert_type }
+    pub fn new(name: String, description: String, alert_level: AlertLevel) -> Self {
+        AlertParams { name, description, alert_level }
     }
 
     #[cfg(test)]
-    pub fn is_text_equal(&self, other_text: &str) -> bool {
-        self.text == other_text
+    pub fn is_name_equal(&self, name: &str) -> bool {
+        self.name == name
     }
 
     #[cfg(test)]
-    pub fn is_level_equal(&self, other_level: AlertLevel) -> bool {
-        self.level == other_level
+    pub fn is_description_equal(&self, description: &str) -> bool {
+        self.description == description
     }
 
     #[cfg(test)]
-    pub fn is_type_equal(&self, other_type: AlertType) -> bool {
-        self.alert_type == other_type
+    pub fn is_level_equal(&self, alert_level: AlertLevel) -> bool {
+        self.alert_level == alert_level
     }
 }
 
@@ -74,7 +50,7 @@ impl AlertParams {
 pub struct WatchtowerAlerter{
     alert_sender: UnboundedSender<AlertParams>,
     alert_receiver: Arc<Mutex<UnboundedReceiver<AlertParams>>>,
-    alert_cache: Arc<Mutex<HashMap<AlertType, Instant>>>,
+    alert_cache: Arc<Mutex<HashMap<String, Instant>>>,
     alert_cache_expiry: Duration,
     pagerduty_client: PagerDutyClient,
     watchtower_system_name: String,
@@ -131,7 +107,7 @@ impl WatchtowerAlerter{
     // Function to handle a single alert
     async fn handle_alert(
         params: AlertParams,
-        cache: Arc<Mutex<HashMap<AlertType, Instant>>>,
+        cache: Arc<Mutex<HashMap<String, Instant>>>,
         pagerduty_client: &PagerDutyClient,
         watchtower_system_name: &str,
         alert_cache_expiry: Duration,
@@ -144,10 +120,10 @@ impl WatchtowerAlerter{
         cache.retain(|_, &mut expiry| now < expiry);
 
         // Check if the alert is in the cache and not expired
-        if !cache.contains_key(&params.alert_type) || now >= *cache.get(&params.alert_type).unwrap() {
-            cache.insert(params.alert_type.clone(), now + alert_cache_expiry);
+        if !cache.contains_key(&params.name) || now >= *cache.get(&params.name).unwrap() {
+            cache.insert(params.name.clone(), now + alert_cache_expiry);
 
-            let severity = match params.level {
+            let severity = match params.alert_level {
                 AlertLevel::Info => "info",
                 AlertLevel::Warn => "warning",
                 AlertLevel::Error => "critical",
@@ -156,10 +132,10 @@ impl WatchtowerAlerter{
 
             // Send alert to PagerDuty if conditions are met
             if SystemTime::now() >= allowed_alerting_start_time
-                && (params.level == AlertLevel::Warn || params.level == AlertLevel::Error) {
+                && (params.alert_level == AlertLevel::Warn || params.alert_level == AlertLevel::Error) {
                 if let Err(e) = pagerduty_client.send_alert(
                     severity.to_string(),
-                     params.text.clone(),
+                     format!("{}: {}", params.name, params.description),
                       watchtower_system_name.to_string()
                 ).await {
                     log::error!("Failed to send alert to PagerDuty: {}", e);
@@ -168,10 +144,10 @@ impl WatchtowerAlerter{
         }
 
         // Log the alert based on its level
-        match params.level {
-            AlertLevel::Info => log::info!("{}", params.text),
-            AlertLevel::Warn => log::warn!("{}", params.text),
-            AlertLevel::Error => log::error!("{}", params.text),
+        match params.alert_level {
+            AlertLevel::Info => log::info!("{}: {}", params.name, params.description),
+            AlertLevel::Warn => log::warn!("{}: {}", params.name, params.description),
+            AlertLevel::Error => log::error!("{}: {}", params.name, params.description),
             AlertLevel::None => {}
         }
     }
@@ -182,20 +158,21 @@ impl WatchtowerAlerter{
 
     // This method is for testing purposes to check if an alert is in the cache
     #[cfg(test)]
-    pub async fn test_is_alert_in_cache(&self, alert_type: &AlertType) -> bool {
+    pub async fn test_is_alert_in_cache(&self, name: &str) -> bool {
         let cache = self.alert_cache.lock().await;
-        cache.contains_key(alert_type)
+        cache.contains_key(name)
     }
 }
 
 // Utility function to send alerts
 pub fn send_alert(
     alert_sender: &UnboundedSender<AlertParams>,
-    text: String,
+    name: String,
+    description: String,
     alert_level: AlertLevel,
-    alert_type: AlertType,
 ) {
-    if let Err(e) = alert_sender.send(AlertParams::new(text, alert_level, alert_type)) {
+    if let Err(e) = alert_sender.send(
+        AlertParams::new(name, description, alert_level)) {
         log::error!("Failed to send alert: {}", e);
     }
 }
@@ -268,36 +245,40 @@ mod watchtower_alerter_tests {
 
         // Critical and warning are expected to be passed on to pagerduty
         assert!(alerter.alert_sender.send(
-            AlertParams::new(String::from("Critical alert"),
-            AlertLevel::Error,
-            AlertType::EthereumAccountFunds,
+            AlertParams::new(
+                String::from("Critical alert"),
+                String::from("Ethereum Contract Query Failed!"),
+                AlertLevel::Error,
         )).is_ok());
         assert!(alerter.alert_sender.send(
-            AlertParams::new(String::from("Warning alert"),
-            AlertLevel::Warn,
-            AlertType::EthereumInvalidStateCommit,
+            AlertParams::new(
+                String::from("Warning alert"),
+                String::from("Ethereum Contract Query Failed!"),
+                AlertLevel::Warn,
         )).is_ok());
         
         // Info and None are not passed on to pagerduty
         assert!(alerter.alert_sender.send(
-            AlertParams::new(String::from("Info alert"),
-            AlertLevel::Info,
-            AlertType::EthereumBlockProduction,
+            AlertParams::new(
+                String::from("Info alert"),
+                String::from("Ethereum Contract Query Failed!"),
+                AlertLevel::Info,
         )).is_ok());
         assert!(alerter.alert_sender.send(
-            AlertParams::new(String::from("No alert"),
-            AlertLevel::None,
-            AlertType::EthereumConnection,
+            AlertParams::new(
+                String::from("No alert"),
+                String::from("Ethereum Contract Query Failed!"),
+                AlertLevel::None,
         )).is_ok());
 
         // Allow some time for the alerts to be processed
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Check if all the alerts are in cache
-        assert!(alerter.test_is_alert_in_cache(&AlertType::EthereumAccountFunds).await);
-        assert!(alerter.test_is_alert_in_cache(&AlertType::EthereumInvalidStateCommit).await);
-        assert!(alerter.test_is_alert_in_cache(&AlertType::EthereumBlockProduction).await);
-        assert!(alerter.test_is_alert_in_cache(&AlertType::EthereumConnection).await);
+        assert!(alerter.test_is_alert_in_cache(&String::from("Critical alert")).await);
+        assert!(alerter.test_is_alert_in_cache(&String::from("Warning alert")).await);
+        assert!(alerter.test_is_alert_in_cache(&String::from("Info alert")).await);
+        assert!(alerter.test_is_alert_in_cache(&String::from("No alert")).await);
     }
 
 
@@ -322,16 +303,17 @@ mod watchtower_alerter_tests {
         alerter.start_alert_handling_thread();
 
         assert!(alerter.alert_sender.send(
-            AlertParams::new(String::from("Info alert"),
-            AlertLevel::Info,
-            AlertType::EthereumAccountFunds,
+            AlertParams::new(
+                String::from("Info alert"),
+                String::from("Ethereum Contract Query Failed!"),
+                AlertLevel::Info,
         )).is_ok());
 
         // Allow some time for the alerts to be processed
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Initially, the alert should be in cache
-        assert!(alerter.test_is_alert_in_cache(&AlertType::EthereumAccountFunds).await);
+        assert!(alerter.test_is_alert_in_cache(&String::from("Info alert")).await);
     
         // Wait for longer than the expiry duration
         tokio::time::sleep(Duration::from_secs(2)).await;
@@ -340,16 +322,16 @@ mod watchtower_alerter_tests {
         assert!(alerter.alert_sender.send(
             AlertParams::new(
                 String::from("None alert"),
+                String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::None,
-                AlertType::EthereumBlockProduction,
         )).is_ok());
 
         // Allow some time for the alerts to be processed
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Now, the alert should be expired and not in cache
-        assert!(!alerter.test_is_alert_in_cache(&AlertType::EthereumAccountFunds).await);
-        assert!(alerter.test_is_alert_in_cache(&AlertType::EthereumBlockProduction).await);
+        assert!(!alerter.test_is_alert_in_cache(&String::from("Info alert")).await);
+        assert!(alerter.test_is_alert_in_cache(&String::from("None alert")).await);
     }
 
     #[tokio::test]
@@ -369,7 +351,10 @@ mod watchtower_alerter_tests {
 
         let alerter = WatchtowerAlerter::new(
             &config,
-             PagerDutyClient::new("test_api_key".to_string(), Arc::new(mock_http_poster)),
+             PagerDutyClient::new(
+                "test_api_key".to_string(),
+                 Arc::new(mock_http_poster),
+                ),
             ).unwrap();
 
         // Start the WatchtowerAlerter thread
@@ -377,14 +362,16 @@ mod watchtower_alerter_tests {
 
         // Attempt to send an alert and since no errors are triggered `mock_http_poster` was not executed.
         assert!(alerter.alert_sender.send(
-            AlertParams::new(String::from("Critical alert"),
-            AlertLevel::Error,
-            AlertType::EthereumAccountFunds,
+            AlertParams::new(
+                String::from("Critical alert"),
+                String::from("Ethereum Contract Query Failed!"),
+                AlertLevel::Error,
         )).is_ok());
         assert!(alerter.alert_sender.send(
-            AlertParams::new(String::from("Warn alert"),
-            AlertLevel::Warn,
-            AlertType::EthereumBlockProduction,
+            AlertParams::new(
+                String::from("Warn alert"),
+                String::from("Ethereum Contract Query Failed!"),
+                AlertLevel::Warn,
         )).is_ok());
     }
 

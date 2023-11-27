@@ -1,4 +1,4 @@
-use crate::alerter::{AlertLevel, WatchtowerAlerter, AlertParams, send_alert, AlertType};
+use crate::alerter::{AlertLevel, WatchtowerAlerter, AlertParams, send_alert};
 use crate::ethereum_actions::{WatchtowerEthereumActions, ActionParams, send_action};
 use crate::fuel_watcher::fuel_chain::FuelChain;
 use crate::WatchtowerConfig;
@@ -37,7 +37,7 @@ pub static ETHEREUM_CONNECTION_RETRIES: u64 = 2;
 pub static ETHEREUM_BLOCK_TIME: u64 = 12;
 
 async fn check_chain_connection(
-    ethereum_chain: &EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
+    ethereum_chain: Arc<dyn EthereumChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -49,9 +49,9 @@ async fn check_chain_connection(
     if let Err(e) = ethereum_chain.check_connection().await {
         send_alert(
             &alert_sender,
+            String::from("Failed to check ethereum connection"),
             format!("Failed to check ethereum connection: {}", e),
             watch_config.connection_alert.alert_level.clone(),
-            AlertType::EthereumConnection,
         );
         send_action(
             &action_sender,
@@ -62,7 +62,7 @@ async fn check_chain_connection(
 }
 
 async fn check_block_production(
-    ethereum_chain: &EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
+    ethereum_chain: Arc<dyn EthereumChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -77,9 +77,9 @@ async fn check_block_production(
         Err(e) => {
             send_alert(
                 &alert_sender,
+                    String::from("Failed to check ethereum block"),
                 format!("Failed to check ethereum block production: {}", e),
                 watch_config.block_production_alert.alert_level.clone(),
-                AlertType::EthereumBlockProduction,
             );
             send_action(
                 &action_sender,
@@ -93,12 +93,12 @@ async fn check_block_production(
     if seconds_since_last_block > watch_config.block_production_alert.max_block_time {
         send_alert(
             &alert_sender,
-            format!(
+                String::from("Ethereum block is taking long"),
+        format!(
                 "Next ethereum block is taking longer than {} seconds. Last block was {} seconds ago.",
                 watch_config.block_production_alert.max_block_time, seconds_since_last_block
             ),
             watch_config.block_production_alert.alert_level.clone(),
-            AlertType::EthereumBlockProduction,
         );
         send_action(
             &action_sender,
@@ -109,7 +109,7 @@ async fn check_block_production(
 }
 
 async fn check_account_balance(
-    ethereum_chain: &EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
+    ethereum_chain: Arc<dyn EthereumChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -132,9 +132,9 @@ async fn check_account_balance(
         Err(e) => {
             send_alert(
                 &alert_sender,
+                String::from("Failed to check ethereum account funds"),
                 format!("Failed to check ethereum account funds: {}", e),
                 watch_config.account_funds_alert.alert_level.clone(),
-                AlertType::EthereumAccountFunds,
             );
             send_action(
                 &action_sender,
@@ -152,12 +152,12 @@ async fn check_account_balance(
     if retrieved_balance < min_balance {
         send_alert(
             &alert_sender,
+            String::from("Ethereum account low on funds"),
             format!(
                 "Ethereum account ({}) is low on funds. Current balance: {}",
                 address, retrieved_balance,
             ),
             watch_config.account_funds_alert.alert_level.clone(),
-            AlertType::EthereumAccountFunds,
         );
         send_action(
             &action_sender,
@@ -168,13 +168,13 @@ async fn check_account_balance(
 }
 
 async fn check_invalid_commits(
-    state_contract: &StateContract<GasEscalatorMiddleware<Provider<Http>>>,
+    ethereum_chain: Arc<dyn EthereumChainTrait>,
+    state_contract: Arc<dyn StateContractTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
     fuel_chain: &FuelChain,
     last_commit_check_block: &mut u64,
-    ethereum_chain: &EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
 ) {
 
     if watch_config.account_funds_alert.alert_level == AlertLevel::None {
@@ -188,9 +188,9 @@ async fn check_invalid_commits(
         Err(e) => {
             send_alert(
                 &alert_sender,
+                String::from("Failed to check state contract"),
                 format!("Failed to check state contract commits: {e}"),
                 watch_config.invalid_state_commit_alert.alert_level.clone(),
-                AlertType::EthereumInvalidStateCommit,
             );
             send_action(
                 &action_sender,
@@ -207,11 +207,11 @@ async fn check_invalid_commits(
                 if !valid {
                     send_alert(
                         &alert_sender,
+                        String::from("Invalid commit was made on the state contract"),
                         format!(
                             "An invalid commit was made on the state contract. Hash: {}", hash,
                         ),
                         watch_config.invalid_state_commit_alert.alert_level.clone(),
-                        AlertType::EthereumInvalidStateCommit,
                     );
                     send_action(
                         &action_sender,
@@ -223,9 +223,9 @@ async fn check_invalid_commits(
             Err(e) => {
                 send_alert(
                     &alert_sender,
-                    format!("Failed to check state contract commits: {}", e),
+                    String::from("Failed to check fuel chain state commit contract"),
+                    format!("Failed to check fuel chain state commit: {}", e),
                     watch_config.invalid_state_commit_alert.alert_level.clone(),
-                    AlertType::EthereumInvalidStateCommit,
                 );
                 send_action(
                     &action_sender,
@@ -242,113 +242,135 @@ async fn check_invalid_commits(
     };
 }
 
-// async fn check_base_asset_deposits(
-//     portal_contract: &PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
-//     alerts: &WatchtowerAlerter,
-//     actions: &WatchtowerEthereumActions,
-//     watch_config: &EthereumClientWatcher,
-//     last_commit_check_block: &u64,
-// ) {
-//     for portal_deposit_alert in &watch_config.portal_deposit_alerts {
-//         if portal_deposit_alert.alert_level == AlertLevel::None {
-//             continue;
-//         }
+async fn check_base_asset_deposits(
+    portal_contract: Arc<dyn PortalContractTrait>,
+    action_sender: UnboundedSender<ActionParams>,
+    alert_sender: UnboundedSender<AlertParams>,
+    watch_config: &EthereumClientWatcher,
+    last_commit_check_block: &u64,
+) {
+    for portal_deposit_alert in &watch_config.portal_deposit_alerts {
+        if portal_deposit_alert.alert_level == AlertLevel::None {
+            continue;
+        }
 
-//         let time_frame = portal_deposit_alert.time_frame;
-//         let amount = match portal_contract.get_base_amount_deposited(
-//             time_frame,
-//             *last_commit_check_block,
-//         ).await {
-//             Ok(amt) => {
-//                 println!("Total ETH deposited: {:?}", amt);
-//                 amt
-//             },
-//             Err(e) => {
-//                 alerts.alert(
-//                     format!("Failed to check base asset deposits: {}", e),
-//                     portal_deposit_alert.alert_level.clone(),
-//                 ).await;
-//                 actions.action(
-//                     portal_deposit_alert.alert_action.clone(),
-//                     Some(portal_deposit_alert.alert_level.clone()),
-//                 );
-//                 continue;
-//             }
-//         };
+        let time_frame = portal_deposit_alert.time_frame;
+        let amount = match portal_contract.get_base_amount_deposited(
+            time_frame,
+            *last_commit_check_block,
+        ).await {
+            Ok(amt) => amt,
+            Err(e) => {
+                send_alert(
+                    &alert_sender,
+                        format!(
+                            "Failed to check portal contract for deposit token {} at address {}",
+                            portal_deposit_alert.token_name, 
+                            portal_deposit_alert.token_address,
+                        ),
+                    format!("Failed to check base asset deposits: {}", e),
+                    portal_deposit_alert.alert_level.clone(),
+                );
+                send_action(
+                    &action_sender,
+                    portal_deposit_alert.alert_action.clone(),
+                    Some(portal_deposit_alert.alert_level.clone()),
+                );
+                continue;
+            }
+        };
 
-//         let amount_threshold = get_value(
-//             portal_deposit_alert.amount,
-//             18,
-//         );
-//         if amount >= amount_threshold {
-//             alerts.alert(
-//                 format!(
-//                     "Base asset deposit threshold of {} over {} seconds has been reached. Amount deposited: {}",
-//                     amount_threshold, time_frame, amount
-//                 ),
-//                 portal_deposit_alert.alert_level.clone(),
-//             ).await;
-//             actions.action(
-//                 portal_deposit_alert.alert_action.clone(),
-//                 Some(portal_deposit_alert.alert_level.clone()),
-//             );
-//         }
-//     }
-// }
+        let amount_threshold = get_value(
+            portal_deposit_alert.amount,
+            18,
+        );
+        if amount >= amount_threshold {
+            send_alert(
+                &alert_sender,
+                format!(
+                        "token {} at address {} is above deposit threshold",
+                        portal_deposit_alert.token_name, 
+                        portal_deposit_alert.token_address,
+                    ),
+                format!(
+                    "Base asset deposit threshold of {} over {} seconds has been reached. Amount deposited: {}",
+                    amount_threshold, time_frame, amount
+                ),
+                portal_deposit_alert.alert_level.clone(),
+            );
+            send_action(
+                &action_sender,
+                portal_deposit_alert.alert_action.clone(),
+                Some(portal_deposit_alert.alert_level.clone()),
+            );
+        }
+    }
+}
 
-// async fn check_base_asset_withdrawals(
-//     portal_contract: &PortalContract<GasEscalatorMiddleware<Provider<Http>>>,
-//     alerts: &WatchtowerAlerter,
-//     actions: &WatchtowerEthereumActions,
-//     watch_config: &EthereumClientWatcher,
-//     last_commit_check_block: &u64,
-// ) {
-//     for portal_withdrawal_alert in &watch_config.portal_withdrawal_alerts {
-//         if portal_withdrawal_alert.alert_level == AlertLevel::None {
-//             continue;
-//         }
+async fn check_base_asset_withdrawals(
+    portal_contract: Arc<dyn PortalContractTrait>,
+    action_sender: UnboundedSender<ActionParams>,
+    alert_sender: UnboundedSender<AlertParams>,
+    watch_config: &EthereumClientWatcher,
+    last_commit_check_block: &u64,
+) {
+    for portal_withdrawal_alert in &watch_config.portal_withdrawal_alerts {
+        if portal_withdrawal_alert.alert_level == AlertLevel::None {
+            continue;
+        }
 
-//         let time_frame = portal_withdrawal_alert.time_frame;
-//         let amount = match portal_contract.get_base_amount_withdrawn(
-//             time_frame,
-//             *last_commit_check_block,
-//         ).await {
-//             Ok(amt) => {
-//                 println!("Total ETH withdrawn: {:?}", amt);
-//                 amt
-//             },
-//             Err(e) => {
-//                 alerts.alert(
-//                     format!("Failed to check base asset withdrawals: {}", e),
-//                     portal_withdrawal_alert.alert_level.clone(),
-//                 ).await;
-//                 actions.action(
-//                     portal_withdrawal_alert.alert_action.clone(),
-//                     Some(portal_withdrawal_alert.alert_level.clone()),
-//                 );
-//                 continue;
-//             }
-//         };
+        let time_frame = portal_withdrawal_alert.time_frame;
+        let amount = match portal_contract.get_base_amount_withdrawn(
+            time_frame,
+            *last_commit_check_block,
+        ).await {
+            Ok(amt) => amt,
+            Err(e) => {
+                send_alert(
+                    &alert_sender,
+                    format!(
+                        "Failed to check portal contract for withdraw token {} at address {}",
+                        portal_withdrawal_alert.token_name, 
+                        portal_withdrawal_alert.token_address,
+                    ),
+                    format!("Failed to check base asset withdrawals: {}", e),
+                    portal_withdrawal_alert.alert_level.clone(),
+                );
+                send_action(
+                    &action_sender,
+                    portal_withdrawal_alert.alert_action.clone(),
+                    Some(portal_withdrawal_alert.alert_level.clone()),
+                );
+                continue;
+            }
+        };
 
-//         let amount_threshold = get_value(
-//             portal_withdrawal_alert.amount,
-//             18, // Assuming 18 is the decimal precision for ETH
-//         );
-//         if amount >= amount_threshold {
-//             alerts.alert(
-//                 format!(
-//                     "Base asset withdrawal threshold of {} over {} seconds has been exceeded. Amount withdrawn: {}",
-//                     amount_threshold, time_frame, amount
-//                 ),
-//                 portal_withdrawal_alert.alert_level.clone(),
-//             ).await;
-//             actions.action(
-//                 portal_withdrawal_alert.alert_action.clone(),
-//                 Some(portal_withdrawal_alert.alert_level.clone()),
-//             );
-//         }
-//     }
-// }
+        let amount_threshold = get_value(
+            portal_withdrawal_alert.amount,
+            18, // Assuming 18 is the decimal precision for ETH
+        );
+        if amount >= amount_threshold {
+            send_alert(
+                &alert_sender,
+                format!(
+                        "token {} at address {} is above deposit threshold",
+                        portal_withdrawal_alert.token_name, 
+                        portal_withdrawal_alert.token_address,
+                    ),
+                format!(
+                    "Base asset withdrawal threshold of {} over {} seconds has been exceeded. Amount withdrawn: {}",
+                    amount_threshold, time_frame, amount
+                ),
+                portal_withdrawal_alert.alert_level.clone(),
+            );
+            send_action(
+                &action_sender,
+                portal_withdrawal_alert.alert_action.clone(),
+                Some(portal_withdrawal_alert.alert_level.clone()),
+            );
+        }
+    }
+}
 
 // async fn check_token_token_deposits(
 //     gateway_contract: &GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
@@ -489,32 +511,35 @@ pub async fn start_ethereum_watcher(
         commit_start_block_offset,
     ) - commit_start_block_offset;
 
+    send_alert(
+        &alert_sender.clone(),
+        String::from("Watching ethereum chain."),
+        String::from("Starting to periodically query the ethereum chain."),
+        AlertLevel::Info,
+    );
+
     let handle = tokio::spawn(async move {
         loop {
-            send_alert(
-                &alert_sender,
-                String::from("Watching ethereum chain."),
-                 AlertLevel::Info,
-                    AlertType::EthereumChainWatching,
-                );
             for _ in 0..POLL_LOGGING_SKIP {
 
-                check_chain_connection(&ethereum_chain, &alerts, &actions, &watch_config).await;
+                check_chain_connection(ethereum_chain.clone(), action_sender.clone(),
+                                        alert_sender.clone(), &watch_config).await;
 
-                // check_block_production(&ethereum_chain, &alerts, &actions, &watch_config).await;
+                check_block_production(ethereum_chain.clone(), action_sender.clone(),
+                                        alert_sender.clone(), &watch_config).await;
 
-                // check_account_balance(&ethereum_chain, &alerts, &actions, &watch_config,
-                //                       &account_address).await;
+                check_account_balance(ethereum_chain.clone(), action_sender.clone(),
+                                      alert_sender.clone(), &watch_config, &account_address).await;
 
-                // check_invalid_commits(&state_contract, &alerts, &actions, &watch_config,
-                //                       &fuel_chain, &mut last_commit_check_block,
-                //                       &ethereum_chain).await;
+                check_invalid_commits(ethereum_chain.clone(), state_contract.clone(), action_sender.clone(),
+                                        alert_sender.clone(), &watch_config, &fuel_chain, 
+                                        &mut last_commit_check_block).await;
 
-                // check_base_asset_deposits(&portal_contract, &alerts, &actions, &watch_config,
-                //                           &last_commit_check_block).await;
+                check_base_asset_deposits(portal_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                                            &watch_config, &last_commit_check_block).await;
 
-                // check_base_asset_withdrawals(&portal_contract, &alerts, &actions, &watch_config,
-                //                              &last_commit_check_block).await;
+                check_base_asset_withdrawals(portal_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                                                &watch_config, &last_commit_check_block).await;
 
                 // check_token_token_deposits(&gateway_contract, &alerts,  &actions, &watch_config,
                 //                            last_commit_check_block).await;
