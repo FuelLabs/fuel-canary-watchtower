@@ -1,19 +1,18 @@
 use std::fmt;
 use std::future::Future;
-
 use std::sync::Arc;
 use std::time::Duration;
-use crate::alerter::{AlertLevel, AlertParams, send_alert};
-use crate::ethereum_watcher::state_contract::{StateContractTrait};
-use crate::ethereum_watcher::gateway_contract::{GatewayContractTrait};
-use crate::ethereum_watcher::portal_contract::{PortalContractTrait};
 
+use serde::Deserialize;
 
 use anyhow::Result;
 
-use serde::Deserialize;
+use crate::alerter::{AlertLevel, AlertParams, send_alert};
+use crate::ethereum_watcher::state_contract::StateContractTrait;
+use crate::ethereum_watcher::gateway_contract::GatewayContractTrait;
+use crate::ethereum_watcher::portal_contract::PortalContractTrait;
+
 use tokio::sync::mpsc::{self, UnboundedSender, UnboundedReceiver};
-use ethers::prelude::*;
 use tokio::time::timeout;
 use tokio::sync::Mutex;
 
