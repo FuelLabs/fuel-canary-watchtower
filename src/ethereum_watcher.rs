@@ -372,122 +372,147 @@ async fn check_base_asset_withdrawals(
     }
 }
 
-// async fn check_token_token_deposits(
-//     gateway_contract: &GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
-//     alerts: &WatchtowerAlerter,
-//     actions: &WatchtowerEthereumActions,
-//     watch_config: &EthereumClientWatcher,
-//     last_commit_check_block: u64,
-// ) {
-//     for gateway_deposit_alert in &watch_config.gateway_deposit_alerts {
+async fn check_token_token_deposits(
+    gateway_contract: Arc<dyn GatewayContractTrait>,
+    action_sender: UnboundedSender<ActionParams>,
+    alert_sender: UnboundedSender<AlertParams>,
+    watch_config: &EthereumClientWatcher,
+    last_commit_check_block: u64,
+) {
+    for gateway_deposit_alert in &watch_config.gateway_deposit_alerts {
 
-//         // Skip iterations where alert level is None
-//         if gateway_deposit_alert.alert_level == AlertLevel::None {
-//             continue;
-//         }
+        // Skip iterations where alert level is None
+        if gateway_deposit_alert.alert_level == AlertLevel::None {
+            continue;
+        }
 
-//         let latest_block = last_commit_check_block;
-//         let amount = match gateway_contract
-//             .get_token_amount_deposited(
-//                 gateway_deposit_alert.time_frame,
-//                 &gateway_deposit_alert.token_address,
-//                 latest_block,
-//             )
-//             .await
-//         {
-//             Ok(amt) => {
-//                 println!("Total Tokens deposited: {:?}", amt);
-//                 amt
-//             },
-//             Err(e) => {
-//                 alerts.alert(
-//                     format!("Failed to check ERC20 deposits: {}", e),
-//                     gateway_deposit_alert.alert_level.clone(),
-//                 ).await;
-//                 actions.action(
-//                     gateway_deposit_alert.alert_action.clone(),
-//                     Some(gateway_deposit_alert.alert_level.clone()),
-//                 );
-//                 continue;
-//             }
-//         };
+        let latest_block = last_commit_check_block;
+        let amount = match gateway_contract
+            .get_token_amount_deposited(
+                gateway_deposit_alert.time_frame,
+                &gateway_deposit_alert.token_address,
+                latest_block,
+            )
+            .await
+        {
+            Ok(amt) => amt,
+            Err(e) => {
+                send_alert(
+                    &alert_sender,
+                    format!(
+                            "Failed to check ERC20 deposits {} at address {}",
+                            gateway_deposit_alert.token_name, 
+                            gateway_deposit_alert.token_address,
+                        ),
+                    format!("Failed to check ERC20 deposits: {}", e),
+                    gateway_deposit_alert.alert_level.clone(),
+                );
+                send_action(
+                    &action_sender,
+                    gateway_deposit_alert.alert_action.clone(),
+                    Some(gateway_deposit_alert.alert_level.clone()),
+                );
+                continue;
+            }
+        };
 
-//         let amount_threshold = get_value(
-//             gateway_deposit_alert.amount,
-//             gateway_deposit_alert.token_decimals,
-//         );
-//         if amount >= amount_threshold {
-//             alerts.alert(
-//                 format!(
-//                     "ERC20 deposit threshold of {}{} over {} seconds has been reached. Amount deposited: {}{}",
-//                     amount_threshold,gateway_deposit_alert.token_name,
-//                     gateway_deposit_alert.time_frame, amount, gateway_deposit_alert.token_name
-//                 ),
-//                 gateway_deposit_alert.alert_level.clone(),
-//             ).await;
-//             actions.action(
-//                 gateway_deposit_alert.alert_action.clone(),
-//                 Some(gateway_deposit_alert.alert_level.clone()),
-//             );
-//         }
-//     }
-// }
+        let amount_threshold = get_value(
+            gateway_deposit_alert.amount,
+            gateway_deposit_alert.token_decimals,
+        );
+        if amount >= amount_threshold {
+            send_alert(
+                &alert_sender,
+                format!(
+                        "ERC20 {} at address {} is above deposit threshold",
+                        gateway_deposit_alert.token_name, 
+                        gateway_deposit_alert.token_address,
+                    ),
+                    format!(
+                        "ERC20 deposit threshold of {}{} over {} seconds has been reached. Amount deposited: {}{}",
+                        amount_threshold, gateway_deposit_alert.token_name,
+                        gateway_deposit_alert.time_frame, amount, gateway_deposit_alert.token_name
+                    ),
+            gateway_deposit_alert.alert_level.clone(),
+            );
+            send_action(
+                &action_sender,
+                gateway_deposit_alert.alert_action.clone(),
+                Some(gateway_deposit_alert.alert_level.clone()),
+            );
+        }
+    }
+}
 
-// async fn check_token_withdrawals(
-//     gateway_contract: &GatewayContract<GasEscalatorMiddleware<Provider<Http>>>,
-//     alerts: &WatchtowerAlerter,
-//     actions: &WatchtowerEthereumActions,
-//     watch_config: &EthereumClientWatcher,
-//     last_commit_check_block: u64,
-// ) {
-//     for gateway_withdrawal_alert in &watch_config.gateway_withdrawal_alerts {
-//         if gateway_withdrawal_alert.alert_level == AlertLevel::None {
-//             continue;
-//         }
+async fn check_token_withdrawals(
+    gateway_contract: Arc<dyn GatewayContractTrait>,
+    action_sender: UnboundedSender<ActionParams>,
+    alert_sender: UnboundedSender<AlertParams>,
+    watch_config: &EthereumClientWatcher,
+    last_commit_check_block: u64,
+) {
+    for gateway_withdrawal_alert in &watch_config.gateway_withdrawal_alerts {
+        if gateway_withdrawal_alert.alert_level == AlertLevel::None {
+            continue;
+        }
 
-//         let latest_block = last_commit_check_block;
-//         let amount = match gateway_contract
-//             .get_token_amount_withdrawn(
-//                 gateway_withdrawal_alert.time_frame,
-//                 &gateway_withdrawal_alert.token_address,
-//                 latest_block,
-//             )
-//             .await
-//         {
-//             Ok(amt) => amt,
-//             Err(e) => {
-//                 alerts.alert(
-//                     format!("Failed to check ERC20 withdrawals: {}", e),
-//                     gateway_withdrawal_alert.alert_level.clone(),
-//                 ).await;
-//                 actions.action(
-//                     gateway_withdrawal_alert.alert_action.clone(),
-//                     Some(gateway_withdrawal_alert.alert_level.clone()),
-//                 );
-//                 continue;
-//             }
-//         };
+        let latest_block = last_commit_check_block;
+        let amount = match gateway_contract
+            .get_token_amount_withdrawn(
+                gateway_withdrawal_alert.time_frame,
+                &gateway_withdrawal_alert.token_address,
+                latest_block,
+            )
+            .await
+        {
+            Ok(amt) => amt,
+            Err(e) => {
+                send_alert(
+                    &alert_sender,
+                    format!(
+                            "Failed to check ERC20 withdrawals {} at address {}",
+                            gateway_withdrawal_alert.token_name, 
+                            gateway_withdrawal_alert.token_address,
+                        ),
+                    format!("Failed to check ERC20 withdrawals: {}", e),
+                    gateway_withdrawal_alert.alert_level.clone(),
+                );
+                send_action(
+                    &action_sender,
+                    gateway_withdrawal_alert.alert_action.clone(),
+                    Some(gateway_withdrawal_alert.alert_level.clone()),
+                );
+                continue;
+            }
+        };
 
-//         let amount_threshold = get_value(
-//             gateway_withdrawal_alert.amount,
-//             gateway_withdrawal_alert.token_decimals,
-//         );
-//         if amount >= amount_threshold {
-//             alerts.alert(
-//             format!(
-//                     "ERC20 withdrawal threshold of {}{} over {} seconds has been exceeded. Amount withdrawn: {}{}",
-//                     amount_threshold, gateway_withdrawal_alert.token_name,
-//                     gateway_withdrawal_alert.time_frame, amount, gateway_withdrawal_alert.token_name
-//                 ),
-//                 gateway_withdrawal_alert.alert_level.clone(),
-//             ).await;
-//             actions.action(
-//                 gateway_withdrawal_alert.alert_action.clone(),
-//                 Some(gateway_withdrawal_alert.alert_level.clone()),
-//             );
-//         }
-//     }
-// }
+        let amount_threshold = get_value(
+            gateway_withdrawal_alert.amount,
+            gateway_withdrawal_alert.token_decimals,
+        );
+        if amount >= amount_threshold {
+            send_alert(
+                &alert_sender,
+                format!(
+                        "ERC20 {} at address {} is above withdrawal threshold",
+                        gateway_withdrawal_alert.token_name, 
+                        gateway_withdrawal_alert.token_address,
+                    ),
+                    format!(
+                        "ERC20 withdrawal threshold of {}{} over {} seconds has been reached. Amount withdrawn: {}{}",
+                        amount_threshold, gateway_withdrawal_alert.token_name,
+                        gateway_withdrawal_alert.time_frame, amount, gateway_withdrawal_alert.token_name
+                    ),
+                    gateway_withdrawal_alert.alert_level.clone(),
+            );
+            send_action(
+                &action_sender,
+                gateway_withdrawal_alert.alert_action.clone(),
+                Some(gateway_withdrawal_alert.alert_level.clone()),
+            );
+        }
+    }
+}
 
 pub async fn start_ethereum_watcher(
     config: &WatchtowerConfig,
@@ -541,11 +566,11 @@ pub async fn start_ethereum_watcher(
                 check_base_asset_withdrawals(portal_contract.clone(), action_sender.clone(), alert_sender.clone(),
                                                 &watch_config, &last_commit_check_block).await;
 
-                // check_token_token_deposits(&gateway_contract, &alerts,  &actions, &watch_config,
-                //                            last_commit_check_block).await;
+                check_token_token_deposits(gateway_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                                             &watch_config, last_commit_check_block).await;
 
-                // check_token_withdrawals(&gateway_contract, &alerts, &actions, &watch_config,
-                //                         last_commit_check_block).await;
+                check_token_withdrawals(gateway_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                                        &watch_config, last_commit_check_block).await;
 
                 thread::sleep(POLL_DURATION);
             }
