@@ -22,7 +22,7 @@ abigen!(FuelChainState, "./abi/FuelChainState.json");
 
 #[async_trait]
 #[cfg_attr(test, automock)] 
-pub trait StateContractTrait{
+pub trait StateContractTrait: Send + Sync {
     async fn initialize(&mut self) -> Result<()>;
     async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>>;
     async fn pause(&self) -> Result<()>;

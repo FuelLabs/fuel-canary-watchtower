@@ -47,9 +47,9 @@ pub struct WatchtowerEthereumActions {
     action_sender: UnboundedSender<ActionParams>,
     action_receiver: Arc<Mutex<UnboundedReceiver<ActionParams>>>,
     alert_sender: UnboundedSender<AlertParams>,
-    state_contract: Arc<Mutex<dyn StateContractTrait + Send>>,
-    portal_contract: Arc<Mutex<dyn PortalContractTrait + Send>>,
-    gateway_contract: Arc<Mutex<dyn GatewayContractTrait + Send>>,
+    state_contract: Arc<dyn StateContractTrait + Send>,
+    portal_contract: Arc<dyn PortalContractTrait + Send>,
+    gateway_contract: Arc<dyn GatewayContractTrait + Send>,
 }
 
 impl fmt::Debug for WatchtowerEthereumActions {
@@ -65,9 +65,9 @@ impl fmt::Debug for WatchtowerEthereumActions {
 impl WatchtowerEthereumActions{
     pub fn new(
         alert_sender: UnboundedSender<AlertParams>,
-        state_contract: Arc<Mutex<dyn StateContractTrait + Send>>,
-        portal_contract: Arc<Mutex<dyn PortalContractTrait + Send>>,
-        gateway_contract: Arc<Mutex<dyn GatewayContractTrait + Send>>,
+        state_contract: Arc<dyn StateContractTrait + Send>,
+        portal_contract: Arc<dyn PortalContractTrait + Send>,
+        gateway_contract: Arc<dyn GatewayContractTrait + Send>,
     ) -> Self {
         let (
             action_sender,
@@ -165,14 +165,13 @@ impl WatchtowerEthereumActions{
     async fn handle_action(
         action: EthereumAction,
         alert_sender: UnboundedSender<AlertParams>,
-        state_contract: Arc<Mutex<dyn StateContractTrait + Send>>,
-        portal_contract: Arc<Mutex<dyn PortalContractTrait + Send>>,
-        gateway_contract: Arc<Mutex<dyn GatewayContractTrait + Send>>,
+        state_contract: Arc<dyn StateContractTrait + Send>,
+        portal_contract: Arc<dyn PortalContractTrait + Send>,
+        gateway_contract: Arc<dyn GatewayContractTrait + Send>,
         alert_level: AlertLevel,
     ) {
         match action {
             EthereumAction::PauseState => {
-                let state_contract = state_contract.lock().await;
                 Self::pause_contract(
                     "state",
                      state_contract.pause(),
@@ -181,7 +180,6 @@ impl WatchtowerEthereumActions{
                     ).await;
             },
             EthereumAction::PauseGateway => {
-                let gateway_contract = gateway_contract.lock().await;
                 Self::pause_contract(
                     "gateway",
                      gateway_contract.pause(),
@@ -190,13 +188,9 @@ impl WatchtowerEthereumActions{
                     ).await;
             },
             EthereumAction::PausePortal => {
-                let portal_contract = portal_contract.lock().await;
                 Self::pause_contract("portal",portal_contract.pause(), alert_sender,alert_level).await;
             },
             EthereumAction::PauseAll => {
-                let state_contract = state_contract.lock().await;
-                let gateway_contract = gateway_contract.lock().await;
-                let portal_contract = portal_contract.lock().await;
                 Self::pause_contract("state", state_contract.pause(), alert_sender.clone(), alert_level.clone()).await;
                 Self::pause_contract("gateway", gateway_contract.pause(), alert_sender.clone(), alert_level.clone()).await;
                 Self::pause_contract("portal", portal_contract.pause(), alert_sender, alert_level).await;
@@ -288,9 +282,9 @@ mod tests {
             action_sender: action_sender.clone(),
             action_receiver: Arc::new(Mutex::new(action_receiver)),
             alert_sender: alert_sender.clone(),
-            state_contract: Arc::new(Mutex::new(mock_state_contract)),
-            portal_contract: Arc::new(Mutex::new(mock_portal_contract)),
-            gateway_contract: Arc::new(Mutex::new(mock_gateway_contract)),
+            state_contract: Arc::new(mock_state_contract),
+            portal_contract: Arc::new(mock_portal_contract),
+            gateway_contract: Arc::new(mock_gateway_contract),
         };
     
         // Start the action handling thread
@@ -346,9 +340,9 @@ mod tests {
             action_sender: action_sender.clone(),
             action_receiver: Arc::new(Mutex::new(action_receiver)),
             alert_sender: alert_sender.clone(),
-            state_contract: Arc::new(Mutex::new(mock_state_contract)),
-            portal_contract: Arc::new(Mutex::new(mock_portal_contract)),
-            gateway_contract: Arc::new(Mutex::new(mock_gateway_contract)),
+            state_contract: Arc::new(mock_state_contract),
+            portal_contract: Arc::new(mock_portal_contract),
+            gateway_contract: Arc::new(mock_gateway_contract),
         };
     
         // Start the action handling thread
@@ -398,9 +392,9 @@ mod tests {
             action_sender,
             action_receiver: Arc::new(Mutex::new(action_receiver)),
             alert_sender,
-            state_contract: Arc::new(Mutex::new(mock_state_contract)),
-            portal_contract: Arc::new(Mutex::new(mock_portal_contract)),
-            gateway_contract: Arc::new(Mutex::new(mock_gateway_contract)),
+            state_contract: Arc::new(mock_state_contract),
+            portal_contract: Arc::new(mock_portal_contract),
+            gateway_contract: Arc::new(mock_gateway_contract),
         };
 
         actions.start_action_handling_thread();
@@ -449,9 +443,9 @@ mod tests {
             action_sender: action_sender.clone(),
             action_receiver: Arc::new(Mutex::new(action_receiver)),
             alert_sender: alert_sender.clone(),
-            state_contract: Arc::new(Mutex::new(mock_state_contract)),
-            portal_contract: Arc::new(Mutex::new(mock_portal_contract)),
-            gateway_contract: Arc::new(Mutex::new(mock_gateway_contract)),
+            state_contract: Arc::new(mock_state_contract),
+            portal_contract: Arc::new(mock_portal_contract),
+            gateway_contract: Arc::new(mock_gateway_contract),
         };
 
         actions.start_action_handling_thread();
@@ -498,9 +492,9 @@ mod tests {
             action_sender: action_sender.clone(),
             action_receiver: Arc::new(Mutex::new(action_receiver)),
             alert_sender: alert_sender.clone(),
-            state_contract: Arc::new(Mutex::new(mock_state_contract)),
-            portal_contract: Arc::new(Mutex::new(mock_portal_contract)),
-            gateway_contract: Arc::new(Mutex::new(mock_gateway_contract)),
+            state_contract: Arc::new(mock_state_contract),
+            portal_contract: Arc::new(mock_portal_contract),
+            gateway_contract: Arc::new(mock_gateway_contract),
         };
 
         actions.start_action_handling_thread();
@@ -545,9 +539,9 @@ mod tests {
             action_sender,
             action_receiver: Arc::new(Mutex::new(action_receiver)),
             alert_sender,
-            state_contract: Arc::new(Mutex::new(mock_state_contract)),
-            portal_contract: Arc::new(Mutex::new(mock_portal_contract)),
-            gateway_contract: Arc::new(Mutex::new(mock_gateway_contract)),
+            state_contract: Arc::new(mock_state_contract),
+            portal_contract: Arc::new(mock_portal_contract),
+            gateway_contract: Arc::new(mock_gateway_contract),
         };
 
         actions.start_action_handling_thread();

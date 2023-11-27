@@ -87,9 +87,9 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     portal_contract.initialize().await?;
     gateway_contract.initialize().await?;
 
-    let arc_state_contract = Arc::new(Mutex::new(state_contract));
-    let arc_portal_contract = Arc::new(Mutex::new(portal_contract));
-    let arc_gateway_contract = Arc::new(Mutex::new(gateway_contract));
+    let arc_state_contract = Arc::new(state_contract);
+    let arc_portal_contract = Arc::new(portal_contract);
+    let arc_gateway_contract = Arc::new(gateway_contract);
 
     // Create the chains.
     let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();

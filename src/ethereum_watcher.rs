@@ -22,6 +22,8 @@ use gateway_contract::GatewayContractTrait;
 use portal_contract::PortalContractTrait;
 use state_contract::StateContractTrait;
 
+use ethereum_chain::EthereumChainTrait;
+
 pub mod state_contract;
 pub mod ethereum_chain;
 pub mod gateway_contract;
@@ -470,10 +472,10 @@ pub async fn start_ethereum_watcher(
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     fuel_chain: FuelChain,
-    ethereum_chain: EthereumChain<GasEscalatorMiddleware<Provider<Http>>>,
-    state_contract: Arc<Mutex<dyn StateContractTrait + Send>>,
-    portal_contract: Arc<Mutex<dyn PortalContractTrait + Send>>,
-    gateway_contract: Arc<Mutex<dyn GatewayContractTrait + Send>>,
+    ethereum_chain: Arc<dyn EthereumChainTrait + Send>,
+    state_contract: Arc<dyn StateContractTrait + Send>,
+    portal_contract: Arc<dyn PortalContractTrait + Send>,
+    gateway_contract: Arc<dyn GatewayContractTrait + Send>,
 ) -> Result<JoinHandle<()>> {
 
     let watch_config = config.ethereum_client_watcher.clone();
@@ -497,7 +499,7 @@ pub async fn start_ethereum_watcher(
                 );
             for _ in 0..POLL_LOGGING_SKIP {
 
-                // check_chain_connection(&ethereum_chain, &alerts, &actions, &watch_config).await;
+                check_chain_connection(&ethereum_chain, &alerts, &actions, &watch_config).await;
 
                 // check_block_production(&ethereum_chain, &alerts, &actions, &watch_config).await;
 

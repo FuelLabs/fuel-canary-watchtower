@@ -22,7 +22,7 @@ abigen!(FuelMessagePortal, "./abi/FuelMessagePortal.json");
 
 #[async_trait]
 #[cfg_attr(test, automock)] 
-pub trait PortalContractTrait{
+pub trait PortalContractTrait: Send + Sync {
     async fn initialize(&mut self) -> Result<()>;
     async fn get_base_amount_deposited(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>;
     async fn get_base_amount_withdrawn(&self, timeframe: u32, latest_block_num: u64) -> Result<U256>;

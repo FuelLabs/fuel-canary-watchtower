@@ -7,7 +7,21 @@ use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Arc;
 
+use async_trait::async_trait;
+
 pub use ethers::types::U256;
+
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
+#[async_trait]
+#[cfg_attr(test, automock)] 
+pub trait EthereumChainTrait{
+    async fn check_connection(&self) -> Result<()>;
+    async fn get_seconds_since_last_block(&self) -> Result<u32>;
+    async fn get_latest_block_number(&self) -> Result<u64>;
+    async fn get_account_balance(&self, addr: &str) -> Result<U256>;
+}
 
 #[derive(Clone, Debug)]
 pub struct EthereumChain<P: Middleware>{
@@ -18,8 +32,11 @@ impl <P: Middleware + 'static>EthereumChain<P> {
     pub async fn new(provider: Arc<P>) -> Result<Self> {
         Ok(EthereumChain { provider })
     }
+}
 
-    pub async fn check_connection(&self) -> Result<()> {
+#[async_trait]
+impl <P: Middleware + 'static> EthereumChainTrait for EthereumChain<P> {
+    async fn check_connection(&self) -> Result<()> {
         for _ in 0..ETHEREUM_CONNECTION_RETRIES {
             if self.provider.get_chainid().await.is_ok() {
                 return Ok(());
@@ -30,7 +47,7 @@ impl <P: Middleware + 'static>EthereumChain<P> {
         )
     }
 
-    pub async fn get_seconds_since_last_block(&self) -> Result<u32> {
+    async fn get_seconds_since_last_block(&self) -> Result<u32> {
         let block_num = self.get_latest_block_number().await?;
         let mut block_option = None;
 
@@ -59,7 +76,7 @@ impl <P: Middleware + 'static>EthereumChain<P> {
         }
     }
 
-    pub async fn get_latest_block_number(&self) -> Result<u64> {
+    async fn get_latest_block_number(&self) -> Result<u64> {
         for _ in 0..ETHEREUM_CONNECTION_RETRIES {
             if let Ok(num) = self.provider.get_block_number().await {
                 return Ok(num.as_u64());
@@ -70,7 +87,7 @@ impl <P: Middleware + 'static>EthereumChain<P> {
         )
     }
 
-    pub async fn get_account_balance(&self, addr: &str) -> Result<U256> {
+    async fn get_account_balance(&self, addr: &str) -> Result<U256> {
         for _i in 0..ETHEREUM_CONNECTION_RETRIES {
             if let Ok(balance) = self.provider.get_balance(
                 Address::from_str(addr)?,

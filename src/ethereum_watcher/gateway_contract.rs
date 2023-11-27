@@ -22,7 +22,7 @@ abigen!(FuelERC20Gateway, "./abi/FuelERC20Gateway.json");
 
 #[async_trait]
 #[cfg_attr(test, automock)] 
-pub trait GatewayContractTrait{
+pub trait GatewayContractTrait: Send + Sync {
     async fn initialize(&mut self) -> Result<()>;
     async fn get_token_amount_deposited(&self, timeframe: u32, token_address: &str, latest_block_num: u64) -> Result<U256>;
     async fn get_token_amount_withdrawn(&self, timeframe: u32, token_address: &str, latest_block_num: u64) -> Result<U256>;
