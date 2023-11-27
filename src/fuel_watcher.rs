@@ -1,18 +1,17 @@
 use crate::alerter::{AlertLevel, AlertParams, send_alert};
 use crate::ethereum_actions::{ActionParams, send_action};
 use crate::WatchtowerConfig;
-
+use crate::config::FuelClientWatcher;
+use crate::fuel_watcher::fuel_utils::get_value;
 
 use anyhow::Result;
-use fuel_chain::{FuelChainTrait};
-use tokio::sync::mpsc::UnboundedSender;
+use fuel_chain::FuelChainTrait;
 
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use crate::config::FuelClientWatcher;
-use crate::fuel_watcher::fuel_utils::get_value;
+use tokio::sync::mpsc::UnboundedSender;
 
 pub mod fuel_chain;
 pub mod fuel_utils;

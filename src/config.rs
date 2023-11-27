@@ -6,6 +6,7 @@ use serde::Deserialize;
 use std::{env, fs, time::Duration};
 
 pub static PRIVATE_KEY_ENV_VAR: &str = "WATCHTOWER_ETH_PRIVATE_KEY";
+pub static PAGERDUTY_KEY_ENV_VAR: &str = "WATCHTOWER_PAGERDUTY_KEY";
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct WatchtowerConfig {
@@ -16,11 +17,11 @@ pub struct WatchtowerConfig {
     pub portal_contract_address: String,
     pub gateway_contract_address: String,
     pub ethereum_wallet_key: Option<String>,
+    pub pagerduty_api_key: Option<String>,
     pub duplicate_alert_delay: u32,
     pub min_duration_from_start_to_err: Duration,
     pub alert_cache_expiry: Duration,
     pub alert_cache_size: usize,
-    pub pagerduty_api_key: Option<String>,
     pub fuel_client_watcher: FuelClientWatcher,
     pub ethereum_client_watcher: EthereumClientWatcher,
 }
@@ -146,7 +147,7 @@ pub fn load_config(file_path: &str) -> Result<WatchtowerConfig> {
     let json_string = fs::read_to_string(file_path)?;
     let mut config: WatchtowerConfig = serde_json::from_str(&json_string)?;
 
-    // fill in the ethereum wallet key
+    // Fill in the ethereum wallet key
     if config.ethereum_wallet_key.is_some() {
         log::warn!("Specifying the ethereum private key in the config file is not safe. Please use the {} environment variable instead.", PRIVATE_KEY_ENV_VAR);
     } else {
@@ -162,5 +163,24 @@ pub fn load_config(file_path: &str) -> Result<WatchtowerConfig> {
         };
     }
 
+    // Fill in the pagerduty api key
+    if config.pagerduty_api_key.is_some() {
+        log::warn!(
+            "Specifying the pagerduty api key in the config file is not safe. Please use the {} environment variable instead.",
+            PAGERDUTY_KEY_ENV_VAR,
+        );
+    } else {
+        // We alert with an error here as this watchtower is ineffective if people aren't alerted.
+        config.pagerduty_api_key = match env::var(PAGERDUTY_KEY_ENV_VAR) {
+            Ok(wallet_key) => Some(wallet_key),
+            Err(_) => {
+                log::error!(
+                    "{} environment variable not specified. Alerting on PagerDuty has been disabled.",
+                    PAGERDUTY_KEY_ENV_VAR
+                );
+                None
+            }
+        };
+    }
     Ok(config)
 }
