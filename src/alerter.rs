@@ -52,13 +52,13 @@ pub struct WatchtowerAlerter{
     alert_receiver: Arc<Mutex<UnboundedReceiver<AlertParams>>>,
     alert_cache: Arc<Mutex<HashMap<String, Instant>>>,
     alert_cache_expiry: Duration,
-    pagerduty_client: PagerDutyClient,
+    pagerduty_client: Option<PagerDutyClient>,
     watchtower_system_name: String,
     allowed_alerting_start_time: SystemTime,
 }
 
 impl WatchtowerAlerter{
-    pub fn new(config: &WatchtowerConfig, pagerduty_client: PagerDutyClient) -> Result<Self> {
+    pub fn new(config: &WatchtowerConfig, pagerduty_client: Option<PagerDutyClient>) -> Result<Self> {
         let alert_cache = Arc::new(Mutex::new(HashMap::with_capacity(config.alert_cache_size)));
         let alert_cache_expiry = config.alert_cache_expiry;
         let watchtower_system_name = config.watchtower_system_name.to_string();
@@ -108,7 +108,7 @@ impl WatchtowerAlerter{
     async fn handle_alert(
         params: AlertParams,
         cache: Arc<Mutex<HashMap<String, Instant>>>,
-        pagerduty_client: &PagerDutyClient,
+        pagerduty_client: &Option<PagerDutyClient>,
         watchtower_system_name: &str,
         alert_cache_expiry: Duration,
         allowed_alerting_start_time: SystemTime
@@ -130,15 +130,17 @@ impl WatchtowerAlerter{
                 AlertLevel::None => return,
             };
 
-            // Send alert to PagerDuty if conditions are met
+            // Send alert to PagerDuty if conditions are met and the client is set
             if SystemTime::now() >= allowed_alerting_start_time
                 && (params.alert_level == AlertLevel::Warn || params.alert_level == AlertLevel::Error) {
-                if let Err(e) = pagerduty_client.send_alert(
-                    severity.to_string(),
-                     format!("{}: {}", params.name, params.description),
-                      watchtower_system_name.to_string()
-                ).await {
-                    log::error!("Failed to send alert to PagerDuty: {}", e);
+                if let Some(client) = pagerduty_client {
+                    if let Err(e) = client.send_alert(
+                        severity.to_string(),
+                        format!("{}: {}", params.name, params.description),
+                        watchtower_system_name.to_string()
+                    ).await {
+                        log::error!("Failed to send alert to PagerDuty: {}", e);
+                    }
                 }
             }
         }
@@ -202,7 +204,10 @@ mod watchtower_alerter_tests {
         );
 
         // Create the WatchtowerAlerter
-        let alerter = WatchtowerAlerter::new(&config, mock_pagerduty_client).unwrap();
+        let alerter = WatchtowerAlerter::new(
+            &config,
+             Some(mock_pagerduty_client),
+            ).unwrap();
 
         // Assert that the WatchtowerAlerter is initialized correctly
         assert_eq!(alerter.alert_cache.lock().await.len(), 0);
@@ -238,7 +243,10 @@ mod watchtower_alerter_tests {
         );
 
         // Create the WatchtowerAlerter
-        let alerter = WatchtowerAlerter::new(&config, mock_pagerduty_client).unwrap();
+        let alerter = WatchtowerAlerter::new(
+            &config,
+             Some(mock_pagerduty_client),
+        ).unwrap();
 
         // Start the WatchtowerAlerter thread
         alerter.start_alert_handling_thread();
@@ -297,7 +305,10 @@ mod watchtower_alerter_tests {
              Arc::new(MockHttpPoster::new()),
         );
     
-        let alerter = WatchtowerAlerter::new(&config, mock_pagerduty_client).unwrap();
+        let alerter = WatchtowerAlerter::new(
+            &config,
+             Some(mock_pagerduty_client),
+        ).unwrap();
 
         // Start the WatchtowerAlerter thread
         alerter.start_alert_handling_thread();
@@ -351,10 +362,10 @@ mod watchtower_alerter_tests {
 
         let alerter = WatchtowerAlerter::new(
             &config,
-             PagerDutyClient::new(
+            Some(PagerDutyClient::new(
                 "test_api_key".to_string(),
                  Arc::new(mock_http_poster),
-                ),
+            )),
             ).unwrap();
 
         // Start the WatchtowerAlerter thread

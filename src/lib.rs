@@ -11,7 +11,7 @@ mod fuel_watcher;
 use std::sync::Arc;
 
 pub use config::{load_config, WatchtowerConfig};
-use alerter::{AlertLevel, WatchtowerAlerter};
+use alerter::WatchtowerAlerter;
 use anyhow::Result;
 use ethers::middleware::Middleware;
 use ethereum_actions::WatchtowerEthereumActions;
@@ -98,10 +98,12 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     let arc_portal_contract = Arc::new(portal_contract) as Arc<dyn PortalContractTrait>;
     let arc_ethereum_chain = Arc::new(ethereum_chain) as Arc<dyn EthereumChainTrait>;
 
-    let pagerduty_client = PagerDutyClient::new(
-        config.pagerduty_api_key.clone(),
-         Arc::new(Client::new()),
-    );
+    let pagerduty_client: Option<PagerDutyClient> = if let Some(api_key) = config.pagerduty_api_key.clone() {
+        Some(PagerDutyClient::new(api_key, Arc::new(Client::new())))
+    } else {
+        None
+    };
+
     let alerts = WatchtowerAlerter::new(config, pagerduty_client).map_err(
         |e| anyhow::anyhow!("Failed to setup alerts: {}", e),
     )?;

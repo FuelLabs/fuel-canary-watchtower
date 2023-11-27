@@ -58,6 +58,10 @@ impl fmt::Debug for WatchtowerEthereumActions {
             .field("action_sender", &self.action_sender)
             .field("action_receiver", &self.action_receiver)
             .field("alert_sender", &self.alert_sender)
+            // You can't print `state_contract`, `portal_contract`, `gateway_contract` directly, but you can indicate its presence
+            .field("state_contract", &"Arc<dyn StateContractTrait>")
+            .field("portal_contract", &"Arc<dyn PortalContractTrait>")
+            .field("gateway_contract", &"Arc<dyn GatewayContractTrait>")
             .finish()
     }
 }
@@ -202,15 +206,6 @@ impl WatchtowerEthereumActions{
     pub fn get_action_sender(&self) -> UnboundedSender<ActionParams> {
         self.action_sender.clone()
     }
-
-    pub fn action(&self, action: EthereumAction, alert_level: Option<AlertLevel>) {
-        let alert_level = match alert_level {
-            Some(level) => level,
-            None => AlertLevel::Info,
-        };
-        let params = ActionParams { action, alert_level };
-        self.action_sender.send(params).unwrap();
-    }
 }
 
 // Utility function to send actions
@@ -220,7 +215,7 @@ pub fn send_action(
     alert_level: Option<AlertLevel>,
 ) {
     let alert_level = alert_level.unwrap_or(AlertLevel::Info);
-    let params = ActionParams { action, alert_level };
+    let params = ActionParams::new(action, alert_level );
     if let Err(e) = action_sender.send(params) {
         log::error!("Failed to send action: {}", e);
     }
@@ -228,7 +223,6 @@ pub fn send_action(
 
 #[cfg(test)]
 mod tests {
-    use anyhow::Error;
     use super::*;
     use tokio::sync::mpsc;
 
@@ -246,7 +240,6 @@ mod tests {
         expected_level: AlertLevel,
     ) {
         if let Some(alert) = alert_receiver.recv().await {
-            println!("{:?}", alert);
             assert_eq!(alert.is_name_equal(expected_name), true);
             assert_eq!(alert.is_description_equal(expected_description), true);
             assert_eq!(alert.is_level_equal(expected_level), true);

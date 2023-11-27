@@ -105,6 +105,6 @@ pub mod test_utils {
         );
 
         // Create and return the WatchtowerAlerter
-        WatchtowerAlerter::new(&config, mock_pagerduty_client)
+        WatchtowerAlerter::new(&config, Some(mock_pagerduty_client))
     }
 }

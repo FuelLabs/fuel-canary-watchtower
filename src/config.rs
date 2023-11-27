@@ -20,7 +20,7 @@ pub struct WatchtowerConfig {
     pub min_duration_from_start_to_err: Duration,
     pub alert_cache_expiry: Duration,
     pub alert_cache_size: usize,
-    pub pagerduty_api_key: String,
+    pub pagerduty_api_key: Option<String>,
     pub fuel_client_watcher: FuelClientWatcher,
     pub ethereum_client_watcher: EthereumClientWatcher,
 }
