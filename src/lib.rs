@@ -19,7 +19,7 @@ use ethereum_watcher::{
     ethereum_utils::{
         setup_ethereum_provider, setup_ethereum_wallet,
     },
-    ethereum_chain::EthereumChain,
+    ethereum_chain::{EthereumChain, EthereumChainTrait},
     start_ethereum_watcher,
 };
 use fuel_watcher::start_fuel_watcher;
@@ -40,7 +40,6 @@ use crate::ethereum_watcher::{
         StateContractTrait,
     }
 };
-use tokio::sync::Mutex;
 
 use crate::fuel_watcher::fuel_utils::setup_fuel_provider;
 use crate::fuel_watcher::fuel_chain::FuelChain;
@@ -57,6 +56,12 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
         config.ethereum_wallet_key.clone(),
         chain_id,
     )?;
+
+    // Create the chains.
+    let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
+    let ethereum_chain = EthereumChain::new(
+        ether_provider.clone(),
+    ).await?;
 
     // Setup the ethereum based contracts.
     let state_contract_address: String = config.state_contract_address.to_string();
@@ -78,7 +83,7 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     let mut gateway_contract = GatewayContract::new(
         gateway_contract_address,
         read_only,
-        ether_provider.clone(),
+        ether_provider,
         wallet,
     ).unwrap();
 
@@ -87,15 +92,11 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     portal_contract.initialize().await?;
     gateway_contract.initialize().await?;
 
-    let arc_state_contract = Arc::new(state_contract);
-    let arc_portal_contract = Arc::new(portal_contract);
-    let arc_gateway_contract = Arc::new(gateway_contract);
-
-    // Create the chains.
-    let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
-    let ethereum_chain = EthereumChain::new(
-        ether_provider,
-    ).await?;
+    // Change them to the correct traits
+    let arc_state_contract = Arc::new(state_contract) as Arc<dyn StateContractTrait>;
+    let arc_gateway_contract = Arc::new(gateway_contract) as Arc<dyn GatewayContractTrait>;
+    let arc_portal_contract = Arc::new(portal_contract) as Arc<dyn PortalContractTrait>;
+    let arc_ethereum_chain = Arc::new(ethereum_chain) as Arc<dyn EthereumChainTrait>;
 
     let pagerduty_client = PagerDutyClient::new(
         config.pagerduty_api_key.clone(),
@@ -114,24 +115,25 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     );
     actions.start_action_handling_thread();
 
-    // let ethereum_thread = start_ethereum_watcher(
-    //     config,
-    //     actions.get_action_sender(),
-    //     alerts.get_alert_sender(),
-    //     fuel_chain.clone(),
-    //     ethereum_chain,
-    //     state_contract,
-    //     portal_contract,
-    //     gateway_contract,
-    // ).await?;
-    // let fuel_thread = start_fuel_watcher(
-    //     config,
-    //     actions.get_action_sender(),
-    //     alerts.get_alert_sender(),
-    //     fuel_chain,
-    // ).await?;
+    let ethereum_thread = start_ethereum_watcher(
+        config,
+        actions.get_action_sender(),
+        alerts.get_alert_sender(),
+        fuel_chain.clone(),
+        arc_ethereum_chain.clone(),
+        arc_state_contract.clone(),
+        arc_portal_contract.clone(),
+        arc_gateway_contract.clone(),
+    ).await?;
+    let fuel_thread = start_fuel_watcher(
+        config,
+        actions.get_action_sender(),
+        alerts.get_alert_sender(),
+        fuel_chain,
+    ).await?;
 
-    // handle_watcher_threads(fuel_thread, ethereum_thread, &alerts).await
+    handle_watcher_threads(fuel_thread, ethereum_thread, &alerts).await.unwrap();
+
     Ok(())
 }
 
