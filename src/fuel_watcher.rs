@@ -214,21 +214,34 @@ async fn check_fuel_token_withdrawals(
 }
 
 pub async fn start_fuel_watcher(
-    watch_config: &FuelClientWatcher,
-    ethereum_chain: Arc<dyn FuelChainTrait>,
+    config: &WatchtowerConfig,
+    fuel_chain: Arc<dyn FuelChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
 ) -> Result<JoinHandle<()>> {
+    let watch_config = config.fuel_client_watcher.clone(); // Clone the config
     let handle = tokio::spawn(async move {
         loop {
-            // update the log every so often to notify that everything is working
-            // alerts.alert(String::from("Watching fuel chain."), AlertLevel::Info).await;
             for _ in 0..POLL_LOGGING_SKIP {
+                // update the log every so often to notify that everything is working
+                send_alert(
+                    &alert_sender.clone(),
+                    String::from("Watching fuel chain."),
+                    String::from("Watching fuel chain."),
+                    AlertLevel::Info,
+                );
 
-                // check_fuel_chain_connection(&fuel_chain, &alerts, &actions, &watch_config).await;
-                // check_fuel_block_production(&fuel_chain, &alerts, &actions, &watch_config).await;
-                // check_fuel_base_asset_withdrawals(&fuel_chain, &alerts, &actions, &watch_config).await;
-                // check_fuel_token_withdrawals(&fuel_chain, &alerts, &actions, &watch_config).await;
+                check_fuel_chain_connection(fuel_chain.clone(), action_sender.clone(),
+                                            alert_sender.clone(), &watch_config).await;
+
+                check_fuel_block_production(fuel_chain.clone(), action_sender.clone(),
+                                            alert_sender.clone(), &watch_config).await;
+
+                check_fuel_base_asset_withdrawals(fuel_chain.clone(), action_sender.clone(),
+                                                  alert_sender.clone(), &watch_config).await;
+
+                check_fuel_token_withdrawals(fuel_chain.clone(), action_sender.clone(),
+                                             alert_sender.clone(), &watch_config).await;
 
                 thread::sleep(POLL_DURATION);
             }

@@ -22,7 +22,7 @@ use ethereum_watcher::{
     ethereum_chain::{EthereumChain, EthereumChainTrait},
     start_ethereum_watcher,
 };
-use fuel_watcher::start_fuel_watcher;
+use fuel_watcher::{start_fuel_watcher, fuel_chain::FuelChainTrait};
 use pagerduty::PagerDutyClient;
 use reqwest::Client;
 use tokio::task::JoinHandle;
@@ -97,6 +97,7 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     let arc_gateway_contract = Arc::new(gateway_contract) as Arc<dyn GatewayContractTrait>;
     let arc_portal_contract = Arc::new(portal_contract) as Arc<dyn PortalContractTrait>;
     let arc_ethereum_chain = Arc::new(ethereum_chain) as Arc<dyn EthereumChainTrait>;
+    let arc_fuel_chain = Arc::new(fuel_chain) as Arc<dyn FuelChainTrait>;
 
     let pagerduty_client: Option<PagerDutyClient> = if let Some(api_key) = config.pagerduty_api_key.clone() {
         Some(PagerDutyClient::new(api_key, Arc::new(Client::new())))
@@ -121,7 +122,7 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
         config,
         actions.get_action_sender(),
         alerts.get_alert_sender(),
-        fuel_chain.clone(),
+        arc_fuel_chain.clone(),
         arc_ethereum_chain.clone(),
         arc_state_contract.clone(),
         arc_portal_contract.clone(),
@@ -129,9 +130,9 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     ).await?;
     let fuel_thread = start_fuel_watcher(
         config,
+        arc_fuel_chain.clone(),
         actions.get_action_sender(),
         alerts.get_alert_sender(),
-        fuel_chain,
     ).await?;
 
     handle_watcher_threads(fuel_thread, ethereum_thread, &alerts).await.unwrap();

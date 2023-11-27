@@ -170,7 +170,7 @@ async fn check_invalid_commits(
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
-    fuel_chain: &FuelChain,
+    fuel_chain: Arc<dyn FuelChainTrait>,
     last_commit_check_block: &mut u64,
 ) {
 
@@ -499,7 +499,7 @@ pub async fn start_ethereum_watcher(
     config: &WatchtowerConfig,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
-    fuel_chain: FuelChain,
+    fuel_chain: Arc<dyn FuelChainTrait>,
     ethereum_chain: Arc<dyn EthereumChainTrait>,
     state_contract: Arc<dyn StateContractTrait>,
     portal_contract: Arc<dyn PortalContractTrait>,
@@ -517,16 +517,16 @@ pub async fn start_ethereum_watcher(
         commit_start_block_offset,
     ) - commit_start_block_offset;
 
-    send_alert(
-        &alert_sender.clone(),
-        String::from("Watching ethereum chain."),
-        String::from("Starting to periodically query the ethereum chain."),
-        AlertLevel::Info,
-    );
-
     let handle = tokio::spawn(async move {
         loop {
             for _ in 0..POLL_LOGGING_SKIP {
+
+                send_alert(
+                    &alert_sender.clone(),
+                    String::from("Watching ethereum chain."),
+                    String::from("Starting to periodically query the ethereum chain."),
+                    AlertLevel::Info,
+                );
 
                 check_chain_connection(ethereum_chain.clone(), action_sender.clone(),
                                         alert_sender.clone(), &watch_config).await;
@@ -538,7 +538,7 @@ pub async fn start_ethereum_watcher(
                                       alert_sender.clone(), &watch_config, &account_address).await;
 
                 check_invalid_commits(ethereum_chain.clone(), state_contract.clone(), action_sender.clone(),
-                                        alert_sender.clone(), &watch_config, &fuel_chain, 
+                                        alert_sender.clone(), &watch_config, fuel_chain.clone(), 
                                         &mut last_commit_check_block).await;
 
                 check_base_asset_deposits(portal_contract.clone(), action_sender.clone(), alert_sender.clone(),
