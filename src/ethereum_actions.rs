@@ -47,9 +47,9 @@ pub struct WatchtowerEthereumActions {
     action_sender: UnboundedSender<ActionParams>,
     action_receiver: Arc<Mutex<UnboundedReceiver<ActionParams>>>,
     alert_sender: UnboundedSender<AlertParams>,
-    state_contract: Arc<dyn StateContractTrait + Send>,
-    portal_contract: Arc<dyn PortalContractTrait + Send>,
-    gateway_contract: Arc<dyn GatewayContractTrait + Send>,
+    state_contract: Arc<dyn StateContractTrait>,
+    portal_contract: Arc<dyn PortalContractTrait>,
+    gateway_contract: Arc<dyn GatewayContractTrait>,
 }
 
 impl fmt::Debug for WatchtowerEthereumActions {
@@ -65,9 +65,9 @@ impl fmt::Debug for WatchtowerEthereumActions {
 impl WatchtowerEthereumActions{
     pub fn new(
         alert_sender: UnboundedSender<AlertParams>,
-        state_contract: Arc<dyn StateContractTrait + Send>,
-        portal_contract: Arc<dyn PortalContractTrait + Send>,
-        gateway_contract: Arc<dyn GatewayContractTrait + Send>,
+        state_contract: Arc<dyn StateContractTrait>,
+        portal_contract: Arc<dyn PortalContractTrait>,
+        gateway_contract: Arc<dyn GatewayContractTrait>,
     ) -> Self {
         let (
             action_sender,
@@ -165,9 +165,9 @@ impl WatchtowerEthereumActions{
     async fn handle_action(
         action: EthereumAction,
         alert_sender: UnboundedSender<AlertParams>,
-        state_contract: Arc<dyn StateContractTrait + Send>,
-        portal_contract: Arc<dyn PortalContractTrait + Send>,
-        gateway_contract: Arc<dyn GatewayContractTrait + Send>,
+        state_contract: Arc<dyn StateContractTrait>,
+        portal_contract: Arc<dyn PortalContractTrait>,
+        gateway_contract: Arc<dyn GatewayContractTrait>,
         alert_level: AlertLevel,
     ) {
         match action {

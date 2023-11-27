@@ -472,10 +472,10 @@ pub async fn start_ethereum_watcher(
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     fuel_chain: FuelChain,
-    ethereum_chain: Arc<dyn EthereumChainTrait + Send>,
-    state_contract: Arc<dyn StateContractTrait + Send>,
-    portal_contract: Arc<dyn PortalContractTrait + Send>,
-    gateway_contract: Arc<dyn GatewayContractTrait + Send>,
+    ethereum_chain: Arc<dyn EthereumChainTrait>,
+    state_contract: Arc<dyn StateContractTrait>,
+    portal_contract: Arc<dyn PortalContractTrait>,
+    gateway_contract: Arc<dyn GatewayContractTrait>,
 ) -> Result<JoinHandle<()>> {
 
     let watch_config = config.ethereum_client_watcher.clone();

@@ -16,7 +16,7 @@ use mockall::{automock, predicate::*};
 
 #[async_trait]
 #[cfg_attr(test, automock)] 
-pub trait EthereumChainTrait{
+pub trait EthereumChainTrait: Send + Sync {
     async fn check_connection(&self) -> Result<()>;
     async fn get_seconds_since_last_block(&self) -> Result<u32>;
     async fn get_latest_block_number(&self) -> Result<u64>;
