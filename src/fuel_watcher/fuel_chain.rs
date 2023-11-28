@@ -134,7 +134,7 @@ impl FuelChainTrait for FuelChain {
     
         // Adjust timeframe to fetch only missing data
         let adjusted_timeframe = if earliest_needed_timestamp == u64::MAX {
-            timeframe // Cache is empty, need to fetch for the entire timeframe
+            (timeframe) / FUEL_BLOCK_TIME as u32
         } else {
             ((earliest_needed_timestamp - start_timestamp) / FUEL_BLOCK_TIME) as u32
         };
@@ -258,7 +258,7 @@ impl FuelChainTrait for FuelChain {
 
         // Adjust timeframe to fetch only missing data
         let adjusted_timeframe = if earliest_needed_timestamp == u64::MAX {
-            timeframe
+            (timeframe) / FUEL_BLOCK_TIME as u32
         } else {
             ((earliest_needed_timestamp - start_timestamp) / FUEL_BLOCK_TIME) as u32
         };
