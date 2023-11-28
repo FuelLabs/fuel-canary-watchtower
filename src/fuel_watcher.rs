@@ -16,8 +16,8 @@ use tokio::sync::mpsc::UnboundedSender;
 pub mod fuel_chain;
 pub mod fuel_utils;
 
-pub static POLL_DURATION: Duration = Duration::from_millis(6000);
-pub static POLL_LOGGING_SKIP: u64 = 50;
+pub static POLL_DURATION: Duration = Duration::from_millis(10000);
+pub static POLL_LOGGING_SKIP: u64 = 75;
 pub static FUEL_CONNECTION_RETRIES: u64 = 2;
 pub static FUEL_BLOCK_TIME: u64 = 1;
 
@@ -105,7 +105,11 @@ async fn check_fuel_base_asset_withdrawals(
         let time_frame = portal_withdraw_alert.time_frame;
         let amount = match fuel_chain.get_base_amount_withdrawn(time_frame).await {
             Ok(amt) => {
-                println!("Total Base Asset Withdrawn {} for time frame {}", amt, time_frame);
+                println!(
+                    "Fuel Chain: Total Base Asset Withdrawn {} for time frame {}",
+                    amt,
+                    time_frame,
+                );
                 amt
             },
             Err(e) => {
@@ -131,7 +135,7 @@ async fn check_fuel_base_asset_withdrawals(
         if amount >= amount_threshold {
             send_alert(
                 &alert_sender,
-                String::from("Base asset is above withdrawal threshold"),
+                String::from("Fuel Chain: Base asset is above withdrawal threshold"),
                 format!(
                     "Base asset withdraw threshold of {} over {} seconds has been reached. Amount withdrawn: {}",
                     amount_threshold, time_frame, amount
@@ -158,14 +162,21 @@ async fn check_fuel_token_withdrawals(
             continue;
         }
 
+        let time_frame = gateway_withdraw_alert.time_frame;
         let amount = match fuel_chain
             .get_token_amount_withdrawn(
-                gateway_withdraw_alert.time_frame,
+                time_frame,
                 &gateway_withdraw_alert.token_address,
             )
             .await
         {
-            Ok(amt) => amt,
+            Ok(amt) => {
+                println!(
+                    "Fuel Chain: Total {} Tokens Withdrawn {} for time frame {}",
+                    gateway_withdraw_alert.token_name, amt, time_frame,
+                );
+                amt
+            },
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -194,7 +205,7 @@ async fn check_fuel_token_withdrawals(
             send_alert(
                 &alert_sender,
             format!(
-                    "ERC20 {} at address {} is above withdrawal threshold",
+                    "Fuel Chain: ERC20 {} at address {} is above withdrawal threshold",
                     gateway_withdraw_alert.token_name, 
                     gateway_withdraw_alert.token_address,
                 ),
@@ -241,8 +252,8 @@ pub async fn start_fuel_watcher(
                 check_fuel_base_asset_withdrawals(fuel_chain.clone(), action_sender.clone(),
                                                   alert_sender.clone(), &watch_config).await;
 
-                // check_fuel_token_withdrawals(fuel_chain.clone(), action_sender.clone(),
-                //                              alert_sender.clone(), &watch_config).await;
+                check_fuel_token_withdrawals(fuel_chain.clone(), action_sender.clone(),
+                                             alert_sender.clone(), &watch_config).await;
 
                 thread::sleep(POLL_DURATION);
             }

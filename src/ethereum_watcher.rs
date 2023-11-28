@@ -255,7 +255,11 @@ async fn check_base_asset_deposits(
             time_frame,
             *last_commit_check_block,
         ).await {
-            Ok(amt) => amt,
+            Ok(amt) => {
+                println!("Ethereum Chain: Total Base Asset Deposited {} for time frame {}",
+                            amt, time_frame);
+                amt
+            },
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -279,7 +283,7 @@ async fn check_base_asset_deposits(
         if amount >= amount_threshold {
             send_alert(
                 &alert_sender,
-                    String::from("Base asset is above deposit threshold."),
+                    String::from("Ethereum Chain: Base asset is above deposit threshold."),
                 format!(
                     "Base asset deposit threshold of {} over {} seconds has been reached. Amount deposited: {}",
                     amount_threshold, time_frame, amount
@@ -312,7 +316,11 @@ async fn check_base_asset_withdrawals(
             time_frame,
             *last_commit_check_block,
         ).await {
-            Ok(amt) => amt,
+            Ok(amt) => {
+                println!("Ethereum Chain: Total Base Asset Withdrawn {} for time frame {}",
+                            amt, time_frame);
+                amt
+            },
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -336,7 +344,7 @@ async fn check_base_asset_withdrawals(
         if amount >= amount_threshold {
             send_alert(
                 &alert_sender,
-                String::from("Base asset is above withdrawal threshold."),
+                String::from("Ethereum Chain: Base asset is above withdrawal threshold."),
                 format!(
                     "Base asset withdrawal threshold of {} over {} seconds has been exceeded. Amount withdrawn: {}",
                     amount_threshold, time_frame, amount
@@ -352,7 +360,7 @@ async fn check_base_asset_withdrawals(
     }
 }
 
-async fn check_token_token_deposits(
+async fn check_token_deposits(
     gateway_contract: Arc<dyn GatewayContractTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
@@ -367,15 +375,20 @@ async fn check_token_token_deposits(
         }
 
         let latest_block = last_commit_check_block;
+        let time_frame = gateway_deposit_alert.time_frame;
         let amount = match gateway_contract
             .get_token_amount_deposited(
-                gateway_deposit_alert.time_frame,
+                time_frame,
                 &gateway_deposit_alert.token_address,
                 latest_block,
             )
             .await
         {
-            Ok(amt) => amt,
+            Ok(amt) => {
+                println!("Ethereum Chain: Total {} Tokens Deposited {} for time frame {}",
+                            gateway_deposit_alert.token_name, amt, time_frame);
+                amt
+            },
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -404,7 +417,7 @@ async fn check_token_token_deposits(
             send_alert(
                 &alert_sender,
                 format!(
-                        "ERC20 {} at address {} is above deposit threshold",
+                        "Ethereum Chain: ERC20 {} at address {} is above deposit threshold",
                         gateway_deposit_alert.token_name, 
                         gateway_deposit_alert.token_address,
                     ),
@@ -437,6 +450,7 @@ async fn check_token_withdrawals(
         }
 
         let latest_block = last_commit_check_block;
+        let time_frame = gateway_withdrawal_alert.time_frame;
         let amount = match gateway_contract
             .get_token_amount_withdrawn(
                 gateway_withdrawal_alert.time_frame,
@@ -445,12 +459,16 @@ async fn check_token_withdrawals(
             )
             .await
         {
-            Ok(amt) => amt,
+            Ok(amt) => {
+                println!("Ethereum Chain: Total {} Tokens Withdrawn {} for time frame {}",
+                            gateway_withdrawal_alert.token_name, amt, time_frame);
+                amt
+            }
             Err(e) => {
                 send_alert(
                     &alert_sender,
                     format!(
-                            "Failed to check ERC20 withdrawals {} at address {}",
+                            "Ethereum Chain: Failed to check ERC20 withdrawals {} at address {}",
                             gateway_withdrawal_alert.token_name, 
                             gateway_withdrawal_alert.token_address,
                         ),
@@ -474,7 +492,7 @@ async fn check_token_withdrawals(
             send_alert(
                 &alert_sender,
                 format!(
-                        "ERC20 {} at address {} is above withdrawal threshold",
+                        "Ethereum Chain: ERC20 {} at address {} is above withdrawal threshold",
                         gateway_withdrawal_alert.token_name, 
                         gateway_withdrawal_alert.token_address,
                     ),
@@ -546,8 +564,8 @@ pub async fn start_ethereum_watcher(
                 check_base_asset_withdrawals(portal_contract.clone(), action_sender.clone(), alert_sender.clone(),
                                                 &watch_config, &last_commit_check_block).await;
 
-                check_token_token_deposits(gateway_contract.clone(), action_sender.clone(), alert_sender.clone(),
-                                             &watch_config, last_commit_check_block).await;
+                check_token_deposits(gateway_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                                      &watch_config, last_commit_check_block).await;
 
                 check_token_withdrawals(gateway_contract.clone(), action_sender.clone(), alert_sender.clone(),
                                         &watch_config, last_commit_check_block).await;

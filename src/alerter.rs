@@ -92,7 +92,6 @@ impl WatchtowerAlerter{
         tokio::spawn(async move {
             let mut rx = alert_receiver.lock().await;
             while let Some(params) = rx.recv().await {
-                println!("{:?}", params);
                 WatchtowerAlerter::handle_alert(
                     params, 
                     Arc::clone(&cache),
