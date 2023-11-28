@@ -175,13 +175,17 @@ impl <P: Middleware + 'static> GatewayContractTrait for GatewayContract<P>{
 
         match &self.contract {
             Some(contract) => {
-                let result = contract.pause().call().await;
-                match result {
-                    Err(e) => Err(anyhow::anyhow!("Failed to pause gateway contract: {}", e)),
-                    Ok(_) => Ok(()),
+                if contract.paused().call().await.is_ok() {
+                    let result = contract.pause().call().await;
+                    match result {
+                        Err(e) => Err(anyhow::anyhow!("Failed to pause gateway contract: {}", e)),
+                        Ok(_) => Ok(()),
+                    }
+                } else {
+                    Err(anyhow::anyhow!("Gateway Contract is already paused or invalid"))
                 }
             }
-            None => Err(anyhow::anyhow!("Contract not initialized")),
+            None => Err(anyhow::anyhow!("Gateway Contract not initialized")),
         }
     }
 }
