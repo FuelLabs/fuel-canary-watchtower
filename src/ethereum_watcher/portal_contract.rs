@@ -159,11 +159,15 @@ impl <P: Middleware + 'static> PortalContractTrait for PortalContract<P>{
 
         match &self.contract {
             Some(contract) => {
-                if contract.paused().call().await.is_ok() {
-                    let result = contract.pause().call().await;
+                if !contract.paused().call().await? {
+                    let pause_call = contract.pause(); // Create a binding
+                    let result = pause_call.send().await;
                     match result {
                         Err(e) => Err(anyhow::anyhow!("Failed to pause portal contract: {}", e)),
-                        Ok(_) => Ok(()),
+                        Ok(res) => {
+                            println!("Pausing portal contract at tx {:?}",res);
+                            Ok(())
+                        },
                     }
                 } else {
                     Err(anyhow::anyhow!("Portal Contract is already paused or invalid"))
