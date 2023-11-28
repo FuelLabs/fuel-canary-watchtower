@@ -11,7 +11,7 @@ mod fuel_watcher;
 use std::sync::Arc;
 
 pub use config::{load_config, WatchtowerConfig};
-use alerter::WatchtowerAlerter;
+use alerter::{WatchtowerAlerter, send_alert, AlertParams, AlertLevel};
 use anyhow::Result;
 use ethers::middleware::Middleware;
 use ethereum_actions::WatchtowerEthereumActions;
@@ -25,7 +25,7 @@ use ethereum_watcher::{
 use fuel_watcher::{start_fuel_watcher, fuel_chain::FuelChainTrait};
 use pagerduty::PagerDutyClient;
 use reqwest::Client;
-use tokio::task::JoinHandle;
+use tokio::{task::JoinHandle, sync::mpsc::UnboundedSender};
 use crate::ethereum_watcher::{
     gateway_contract::{
         GatewayContract,
@@ -114,16 +114,16 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     );
     actions.start_action_handling_thread();
 
-    let ethereum_thread = start_ethereum_watcher(
-        config,
-        actions.get_action_sender(),
-        alerts.get_alert_sender(),
-        arc_fuel_chain.clone(),
-        arc_ethereum_chain.clone(),
-        arc_state_contract.clone(),
-        arc_portal_contract.clone(),
-        arc_gateway_contract.clone(),
-    ).await?;
+    // let ethereum_thread = start_ethereum_watcher(
+    //     config,
+    //     actions.get_action_sender(),
+    //     alerts.get_alert_sender(),
+    //     arc_fuel_chain.clone(),
+    //     arc_ethereum_chain.clone(),
+    //     arc_state_contract.clone(),
+    //     arc_portal_contract.clone(),
+    //     arc_gateway_contract.clone(),
+    // ).await?;
     let fuel_thread = start_fuel_watcher(
         config,
         arc_fuel_chain.clone(),
@@ -131,31 +131,34 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
         alerts.get_alert_sender(),
     ).await?;
 
-    handle_watcher_threads(fuel_thread, ethereum_thread, &alerts).await.unwrap();
+    handle_watcher_threads(fuel_thread,alerts.get_alert_sender()).await.unwrap();
 
     Ok(())
 }
 
 async fn handle_watcher_threads(
     fuel_thread: JoinHandle<()>,
-    ethereum_thread: JoinHandle<()>,
-    _alerts: &WatchtowerAlerter,
+    // ethereum_thread: JoinHandle<()>,
+    alert_sender: UnboundedSender<AlertParams>,
 ) -> Result<()> {
 
-    if let Err(e) = ethereum_thread.await {
-        // alerts.alert(
-        //     String::from("Ethereum watcher thread failed."),
-        //     AlertLevel::Error,
-        //     AlertType::EthereumWatcherThreadFailed,
-        // ).await;
-        return Err(anyhow::anyhow!("Ethereum watcher thread failed: {}", e));
-    }
+    // if let Err(e) = ethereum_thread.await {
+    //     send_alert(
+    //         &alert_sender.clone(),
+    //         String::from("Ethereum watcher thread failed."),
+    //         String::from("Ethereum watcher thread failed."),
+    //         AlertLevel::Error,
+    //     );
+    //     return Err(anyhow::anyhow!("Ethereum watcher thread failed: {}", e));
+    // }
 
     if let Err(e) = fuel_thread.await {
-        // alerts.alert(
-        //     String::from("Fuel watcher thread failed."),
-        //     AlertLevel::Error,
-        // ).await;
+        send_alert(
+            &alert_sender.clone(),
+            String::from("Fuel watcher thread failed."),
+            String::from("Fuel watcher thread failed."),
+            AlertLevel::Error,
+        );
         return Err(anyhow::anyhow!("Fuel watcher thread failed: {}", e));
     }
 

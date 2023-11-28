@@ -17,8 +17,9 @@ use fuels::types::tx_status::TxStatus;
 use fuels::tx::Receipt;
 
 use async_trait::async_trait;
+use tokio::sync::Mutex;
 
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(test)]
@@ -47,11 +48,16 @@ pub trait FuelChainTrait: Send + Sync {
 #[derive(Clone, Debug)]
 pub struct FuelChain {
     provider: Arc<Provider>,
+    // Nested HashMap: Asset Token Identifier -> (Timestamp -> Amount)
+    asset_withdrawal_cache: Arc<Mutex<HashMap<String, HashMap<u64, u64>>>>,
 }
 
 impl FuelChain {
     pub fn new(provider: Arc<Provider>) -> Result<Self> {
-        Ok(FuelChain { provider })
+        Ok(FuelChain {
+            provider,
+            asset_withdrawal_cache: Arc::new(Mutex::new(HashMap::new())),
+         })
     }
 }
 
@@ -96,10 +102,46 @@ impl FuelChainTrait for FuelChain {
     }
 
     async fn get_base_amount_withdrawn(&self, timeframe: u32) -> Result<u64> {
-        let num_blocks = match usize::try_from(timeframe as u64 / FUEL_BLOCK_TIME) {
-            Ok(val) => val,
-            Err(e) => return Err(anyhow::anyhow!("{e}")),
+        let chain_info = self.fetch_chain_info().await?;
+        let current_timestamp = chain_info.latest_block.header.time
+            .ok_or_else(|| anyhow::anyhow!("Failed to get current block timestamp"))?
+            .timestamp() as u64;
+    
+        let start_timestamp = current_timestamp.saturating_sub(timeframe as u64);
+        let mut cached_withdrawals = self.asset_withdrawal_cache.lock().await;
+        let base_token_cache = cached_withdrawals.entry(
+            String::from("base_token"),
+        ).or_insert_with(HashMap::new);
+
+        let mut total_from_cache = 0;
+        let mut earliest_needed_timestamp = u64::MAX;
+    
+        // Check the cache for any amounts within the timeframe
+        for (&timestamp, &amount) in base_token_cache.iter() {
+            if timestamp >= start_timestamp {
+                total_from_cache += amount;
+                earliest_needed_timestamp = earliest_needed_timestamp.min(timestamp);
+            }
+        }
+
+        // Release the lock
+        drop(cached_withdrawals);
+
+        // If all needed data is in the cache
+        if earliest_needed_timestamp <= start_timestamp {
+            return Ok(total_from_cache);
+        }
+    
+        // Adjust timeframe to fetch only missing data
+        let adjusted_timeframe = if earliest_needed_timestamp == u64::MAX {
+            timeframe // Cache is empty, need to fetch for the entire timeframe
+        } else {
+            ((earliest_needed_timestamp - start_timestamp) / FUEL_BLOCK_TIME) as u32
         };
+        let num_blocks = usize::try_from(adjusted_timeframe).map_err(|e| anyhow::anyhow!("{e}"))?;
+
+        // Fetch and process missing blocks
+        let mut total_from_blocks = 0;
         for i in 0..FUEL_CONNECTION_RETRIES {
             let req = PaginationRequest {
                 cursor: None,
@@ -108,27 +150,30 @@ impl FuelChainTrait for FuelChain {
             };
             match self.provider.get_blocks(req).await {
                 Ok(blocks_result) => {
-                    let mut total: u64 = 0;
                     for block in blocks_result.results {
+                        let mut block_total = 0;
                         for tx_id in block.transactions {
                             match self.get_base_amount_withdrawn_from_tx(&tx_id).await {
-                                Ok(amount) => {
-                                    total += amount;
-                                }
+                                Ok(amount) => block_total += amount,
                                 Err(e) => return Err(anyhow::anyhow!("{e}")),
                             }
                         }
+                        total_from_blocks += block_total;
+        
+                        // Update cache with the total amount for this block
+                        let block_timestamp = block.header.time.unwrap().timestamp() as u64;
+                        let mut cache = self.asset_withdrawal_cache.lock().await;
+                        let base_token_cache = cache.entry("base_token".to_string()).or_insert_with(HashMap::new);
+                        *base_token_cache.entry(block_timestamp).or_insert(0) += block_total;
                     }
-                    return Ok(total);
+                    break;
                 }
-                Err(e) => {
-                    if i == FUEL_CONNECTION_RETRIES - 1 {
-                        return Err(anyhow::anyhow!("{e}"));
-                    }
-                }
+                Err(e) if i == FUEL_CONNECTION_RETRIES - 1 => return Err(anyhow::anyhow!("{e}")),
+                Err(_) => continue,
             }
         }
-        Ok(0)
+
+        Ok(total_from_cache + total_from_blocks)
     }
 
     async fn get_base_amount_withdrawn_from_tx(&self, tx_id: &Bytes32) -> Result<u64> {

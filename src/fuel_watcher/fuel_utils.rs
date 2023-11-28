@@ -17,7 +17,12 @@ pub fn get_value(value_fp: f64, decimals: u8) -> u64 {
 
     let value = value_fp * 10.0_f64.powf(decimals_p1 as f64);
 
-    (value as u64) * 10_u64.pow(decimals_p2 as u32)
+    // Check for potential overflow
+    let value_u64 = value as u64;
+    let pow_u64 = 10_u64.pow(decimals_p2 as u32);
+
+    // Use checked_mul to prevent overflow
+    value_u64.checked_mul(pow_u64).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]
