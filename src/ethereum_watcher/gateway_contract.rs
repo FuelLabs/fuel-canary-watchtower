@@ -107,7 +107,7 @@ impl <P: Middleware + 'static> GatewayContractTrait for GatewayContract<P>{
                     let mut total = U256::zero();
                     for log in logs {
                         let amount = U256::from_big_endian(
-                            &log.data[32..64],
+                            &log.data[0..32],
                         ).mul(U256::from(1_000_000_000));
                         total += amount;
                     }
@@ -151,7 +151,7 @@ impl <P: Middleware + 'static> GatewayContractTrait for GatewayContract<P>{
                     let mut total = U256::zero();
                     for log in logs {
                         let amount = U256::from_big_endian(
-                            &log.data[32..64],
+                            &log.data[0..32],
                         ).mul(U256::from(1_000_000_000));
                         total += amount;
                     }
