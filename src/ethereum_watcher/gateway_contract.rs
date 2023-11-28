@@ -229,13 +229,10 @@ mod tests {
         let gateway_contract = setup_gateway_contract(arc_provider, mock.clone(), wallet).expect("Setup failed");
 
         // Serialize the deposit amounts to a byte vector
-        // Create a vector with 32 zero bytes
-        let mut deposit_data_one: Vec<u8> = vec![0u8; 32];
-        let mut deposit_data_two: Vec<u8> = vec![0u8; 32];
 
         // Extend the vectors with the encoded deposit amounts
-        deposit_data_one.extend(ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]));
-        deposit_data_two.extend(ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]));
+        let deposit_data_one = ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]);
+        let deposit_data_two =  ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]);
 
         let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
         let log_entry_one = Log {
@@ -287,11 +284,8 @@ mod tests {
         let gateway_contract = setup_gateway_contract(provider, mock.clone(), wallet).expect("Setup failed");
 
         // Create and extend the vectors with the encoded withdrawal amounts, multiplied by 1_000_000_000
-        let mut withdrawal_data_one: Vec<u8> = vec![0u8; 32];
-        let mut withdrawal_data_two: Vec<u8> = vec![0u8; 32];
-
-        withdrawal_data_one.extend(ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]));
-        withdrawal_data_two.extend(ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]));
+        let withdrawal_data_one = ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]);
+        let withdrawal_data_two = ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]);
 
         let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
         let log_entry_one = Log {
