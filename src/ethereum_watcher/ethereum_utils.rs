@@ -61,7 +61,8 @@ pub fn setup_ethereum_wallet(
 
 pub fn get_public_address(key_str: &str) -> Result<String> {
     let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?;
-    Ok(wallet.address().encode_hex())
+    let address_str = format!("{:x}", wallet.address());
+    Ok(address_str)
 }
 
 pub fn get_value(value_fp: f64, decimals: u8) -> U256 {
