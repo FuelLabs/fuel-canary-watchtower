@@ -138,7 +138,7 @@ impl FuelChainTrait for FuelChain {
         } else {
             ((earliest_needed_timestamp - start_timestamp) / FUEL_BLOCK_TIME) as u32
         };
-        let num_blocks = i32::try_from(adjusted_timeframe).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let num_blocks = usize::try_from(adjusted_timeframe).map_err(|e| anyhow::anyhow!("{e}"))?;
 
         // Fetch and process missing blocks
         let mut total_from_blocks = 0;
@@ -208,7 +208,7 @@ impl FuelChainTrait for FuelChain {
         }
 
         // Check if the transaction is of script type, if not we return.
-        if !matches!(response.transaction, TransactionType::Script(_)) {
+        if !matches!(response.transaction, Some(TransactionType::Script(_))) {
             return Ok(0);
         }
 
@@ -262,7 +262,7 @@ impl FuelChainTrait for FuelChain {
         } else {
             ((earliest_needed_timestamp - start_timestamp) / FUEL_BLOCK_TIME) as u32
         };
-        let num_blocks = i32::try_from(adjusted_timeframe).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let num_blocks = usize::try_from(adjusted_timeframe).map_err(|e| anyhow::anyhow!("{e}"))?;
 
         // Fetch and process missing blocks
         let mut total_from_blocks = 0;
@@ -335,7 +335,7 @@ impl FuelChainTrait for FuelChain {
         }
 
         // Check if the transaction is of script type, if not we return.
-        if !matches!(response.transaction, TransactionType::Script(_)) {
+        if !matches!(response.transaction, Some(TransactionType::Script(_))) {
             return Ok(0);
         }
 
