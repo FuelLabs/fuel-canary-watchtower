@@ -22,7 +22,7 @@ pub static FUEL_CONNECTION_RETRIES: u64 = 2;
 pub static FUEL_BLOCK_TIME: u64 = 1;
 
 async fn check_fuel_chain_connection(
-    fuel_chain: Arc<dyn FuelChainTrait>,
+    fuel_chain: &Arc<dyn FuelChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &FuelClientWatcher,
@@ -47,7 +47,7 @@ async fn check_fuel_chain_connection(
 }
 
 async fn check_fuel_block_production(
-    fuel_chain: Arc<dyn FuelChainTrait>,
+    fuel_chain: &Arc<dyn FuelChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &FuelClientWatcher,
@@ -93,7 +93,7 @@ async fn check_fuel_block_production(
 }
 
 async fn check_fuel_base_asset_withdrawals(
-    fuel_chain: Arc<dyn FuelChainTrait>,
+    fuel_chain: &Arc<dyn FuelChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &FuelClientWatcher,
@@ -152,7 +152,7 @@ async fn check_fuel_base_asset_withdrawals(
 }
 
 async fn check_fuel_token_withdrawals(
-    fuel_chain: Arc<dyn FuelChainTrait>,
+    fuel_chain: &Arc<dyn FuelChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &FuelClientWatcher,
@@ -227,11 +227,12 @@ async fn check_fuel_token_withdrawals(
 
 pub async fn start_fuel_watcher(
     config: &WatchtowerConfig,
-    fuel_chain: Arc<dyn FuelChainTrait>,
+    fuel_chain: &Arc<dyn FuelChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
 ) -> Result<JoinHandle<()>> {
     let watch_config = config.fuel_client_watcher.clone();
+    let fuel_chain = Arc::clone(fuel_chain);
     let handle = tokio::spawn(async move {
         loop {
             for _ in 0..POLL_LOGGING_SKIP {
@@ -243,16 +244,16 @@ pub async fn start_fuel_watcher(
                     AlertLevel::Info,
                 );
 
-                check_fuel_chain_connection(fuel_chain.clone(), action_sender.clone(),
+                check_fuel_chain_connection(&fuel_chain, action_sender.clone(),
                                             alert_sender.clone(), &watch_config).await;
 
-                check_fuel_block_production(fuel_chain.clone(), action_sender.clone(),
+                check_fuel_block_production(&fuel_chain, action_sender.clone(),
                                             alert_sender.clone(), &watch_config).await;
 
-                check_fuel_base_asset_withdrawals(fuel_chain.clone(), action_sender.clone(),
+                check_fuel_base_asset_withdrawals(&fuel_chain, action_sender.clone(),
                                                   alert_sender.clone(), &watch_config).await;
 
-                check_fuel_token_withdrawals(fuel_chain.clone(), action_sender.clone(),
+                check_fuel_token_withdrawals(&fuel_chain, action_sender.clone(),
                                              alert_sender.clone(), &watch_config).await;
 
                 thread::sleep(POLL_DURATION);

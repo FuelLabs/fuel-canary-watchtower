@@ -33,7 +33,7 @@ pub static ETHEREUM_CONNECTION_RETRIES: u64 = 2;
 pub static ETHEREUM_BLOCK_TIME: u64 = 12;
 
 async fn check_chain_connection(
-    ethereum_chain: Arc<dyn EthereumChainTrait>,
+    ethereum_chain: &Arc<dyn EthereumChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -58,7 +58,7 @@ async fn check_chain_connection(
 }
 
 async fn check_block_production(
-    ethereum_chain: Arc<dyn EthereumChainTrait>,
+    ethereum_chain: &Arc<dyn EthereumChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -105,7 +105,7 @@ async fn check_block_production(
 }
 
 async fn check_account_balance(
-    ethereum_chain: Arc<dyn EthereumChainTrait>,
+    ethereum_chain: &Arc<dyn EthereumChainTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -164,12 +164,12 @@ async fn check_account_balance(
 }
 
 async fn check_invalid_commits(
-    ethereum_chain: Arc<dyn EthereumChainTrait>,
-    state_contract: Arc<dyn StateContractTrait>,
+    ethereum_chain: &Arc<dyn EthereumChainTrait>,
+    state_contract: &Arc<dyn StateContractTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
-    fuel_chain: Arc<dyn FuelChainTrait>,
+    fuel_chain: &Arc<dyn FuelChainTrait>,
     last_commit_check_block: &mut u64,
 ) {
 
@@ -239,7 +239,7 @@ async fn check_invalid_commits(
 }
 
 async fn check_base_asset_deposits(
-    portal_contract: Arc<dyn PortalContractTrait>,
+    portal_contract: &Arc<dyn PortalContractTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -300,7 +300,7 @@ async fn check_base_asset_deposits(
 }
 
 async fn check_base_asset_withdrawals(
-    portal_contract: Arc<dyn PortalContractTrait>,
+    portal_contract: &Arc<dyn PortalContractTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -361,7 +361,7 @@ async fn check_base_asset_withdrawals(
 }
 
 async fn check_token_deposits(
-    gateway_contract: Arc<dyn GatewayContractTrait>,
+    gateway_contract: &Arc<dyn GatewayContractTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -438,7 +438,7 @@ async fn check_token_deposits(
 }
 
 async fn check_token_withdrawals(
-    gateway_contract: Arc<dyn GatewayContractTrait>,
+    gateway_contract: &Arc<dyn GatewayContractTrait>,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &EthereumClientWatcher,
@@ -516,11 +516,11 @@ pub async fn start_ethereum_watcher(
     config: &WatchtowerConfig,
     action_sender: UnboundedSender<ActionParams>,
     alert_sender: UnboundedSender<AlertParams>,
-    fuel_chain: Arc<dyn FuelChainTrait>,
-    ethereum_chain: Arc<dyn EthereumChainTrait>,
-    state_contract: Arc<dyn StateContractTrait>,
-    portal_contract: Arc<dyn PortalContractTrait>,
-    gateway_contract: Arc<dyn GatewayContractTrait>,
+    fuel_chain: &Arc<dyn FuelChainTrait>,
+    ethereum_chain: &Arc<dyn EthereumChainTrait>,
+    state_contract: &Arc<dyn StateContractTrait>,
+    portal_contract: &Arc<dyn PortalContractTrait>,
+    gateway_contract: &Arc<dyn GatewayContractTrait>,
 ) -> Result<JoinHandle<()>> {
 
     let watch_config = config.ethereum_client_watcher.clone();
@@ -534,6 +534,12 @@ pub async fn start_ethereum_watcher(
         commit_start_block_offset,
     ) - commit_start_block_offset;
 
+    let fuel_chain = Arc::clone(fuel_chain);
+    let ethereum_chain = Arc::clone(ethereum_chain);
+    let state_contract = Arc::clone(state_contract);
+    let portal_contract = Arc::clone(portal_contract);
+    let gateway_contract = Arc::clone(gateway_contract);
+
     let handle = tokio::spawn(async move {
         loop {
             for _ in 0..POLL_LOGGING_SKIP {
@@ -545,29 +551,29 @@ pub async fn start_ethereum_watcher(
                     AlertLevel::Info,
                 );
 
-                check_chain_connection(ethereum_chain.clone(), action_sender.clone(),
+                check_chain_connection(&ethereum_chain, action_sender.clone(),
                                         alert_sender.clone(), &watch_config).await;
 
-                check_block_production(ethereum_chain.clone(), action_sender.clone(),
+                check_block_production(&ethereum_chain, action_sender.clone(),
                                         alert_sender.clone(), &watch_config).await;
 
-                check_account_balance(ethereum_chain.clone(), action_sender.clone(),
+                check_account_balance(&ethereum_chain, action_sender.clone(),
                                       alert_sender.clone(), &watch_config, &account_address).await;
 
-                check_invalid_commits(ethereum_chain.clone(), state_contract.clone(), action_sender.clone(),
-                                        alert_sender.clone(), &watch_config, fuel_chain.clone(), 
+                check_invalid_commits(&ethereum_chain, &state_contract, action_sender.clone(),
+                                        alert_sender.clone(), &watch_config, &fuel_chain, 
                                         &mut last_commit_check_block).await;
 
-                check_base_asset_deposits(portal_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                check_base_asset_deposits(&portal_contract, action_sender.clone(), alert_sender.clone(),
                                             &watch_config, &last_commit_check_block).await;
 
-                check_base_asset_withdrawals(portal_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                check_base_asset_withdrawals(&portal_contract, action_sender.clone(), alert_sender.clone(),
                                                 &watch_config, &last_commit_check_block).await;
 
-                check_token_deposits(gateway_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                check_token_deposits(&gateway_contract, action_sender.clone(), alert_sender.clone(),
                                       &watch_config, last_commit_check_block).await;
 
-                check_token_withdrawals(gateway_contract.clone(), action_sender.clone(), alert_sender.clone(),
+                check_token_withdrawals(&gateway_contract, action_sender.clone(), alert_sender.clone(),
                                         &watch_config, last_commit_check_block).await;
 
                 thread::sleep(POLL_DURATION);

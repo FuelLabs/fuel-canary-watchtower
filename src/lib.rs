@@ -118,15 +118,15 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
         config,
         actions.get_action_sender(),
         alerts.get_alert_sender(),
-        arc_fuel_chain.clone(),
-        arc_ethereum_chain.clone(),
-        arc_state_contract.clone(),
-        arc_portal_contract.clone(),
-        arc_gateway_contract.clone(),
+        &arc_fuel_chain,
+        &arc_ethereum_chain,
+        &arc_state_contract,
+        &arc_portal_contract,
+        &arc_gateway_contract,
     ).await?;
     let fuel_thread = start_fuel_watcher(
         config,
-        arc_fuel_chain.clone(),
+        &arc_fuel_chain,
         actions.get_action_sender(),
         alerts.get_alert_sender(),
     ).await?;
