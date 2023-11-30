@@ -243,18 +243,14 @@ impl FuelChainTrait for FuelChain {
         let mut burn_found: bool = false;
         for receipt in receipts{
             if let ReceiptType::Burn = receipt.receipt_type {
-
-                // Skip this receipt if contract_id is None
-                let contract_id = match &receipt.contract_id {
-                    Some(id) => id,
+                // Skip this receipt if contract is None
+                let contract_id = match &receipt.contract {
+                    Some(contract) => contract.id.to_string(),
                     None => continue,
                 };
         
-                println!("Contract ID: {:?}", contract_id);
-        
                 // Set burn_found to true if the contract_id matches token_contract_id
-                if contract_id.to_string() == token_contract_id {
-                    println!("Burn receipt found: {:?}", receipt);
+                if contract_id == token_contract_id {
                     burn_found = true;
                 }
             }
@@ -264,7 +260,18 @@ impl FuelChainTrait for FuelChain {
                 if !burn_found {
                     continue;
                 }
-    
+                
+                // Skip this receipt if contract is None
+                let contract_id = match &receipt.contract {
+                    Some(contract) => contract.id.to_string(),
+                    None => continue,
+                };
+
+                // Just incase verify that this log data belongs to the correct contract
+                if contract_id != token_contract_id {
+                    continue;
+                }
+
                 // Skip this receipt if data is None
                 let data = match &receipt.data {
                     Some(data) => data,
