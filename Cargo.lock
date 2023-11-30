@@ -1789,8 +1789,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cynic",
  "ethers",
  "eyre 0.3.10",
+ "fuel-core-client",
  "fuels",
  "log",
  "log4rs",

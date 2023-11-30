@@ -4,7 +4,6 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use std::convert::TryFrom;
 use std::ops::Mul;
-use ethers::abi::AbiEncode;
 use fuels::tx::Bytes32;
 use ethers::prelude::{GasEscalatorMiddleware, Signer, Wallet, Log};
 use ethers::middleware::gas_escalator::{Frequency, GeometricGasPrice};

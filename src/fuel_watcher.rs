@@ -15,6 +15,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 pub mod fuel_chain;
 pub mod fuel_utils;
+pub mod extended_provider;
 
 pub static POLL_DURATION: Duration = Duration::from_millis(10000);
 pub static POLL_LOGGING_SKIP: u64 = 75;
