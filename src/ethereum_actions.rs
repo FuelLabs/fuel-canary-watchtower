@@ -39,6 +39,16 @@ impl ActionParams {
     pub fn new(action: EthereumAction, alert_level: AlertLevel) -> Self {
         ActionParams { action, alert_level }
     }
+
+    #[cfg(test)]
+    pub fn is_action_equal(&self, action: EthereumAction) -> bool {
+        self.action == action
+    }
+
+    #[cfg(test)]
+    pub fn is_alert_level_equal(&self, alert_level: AlertLevel) -> bool {
+        self.alert_level == alert_level
+    }
 }
 
 #[derive(Clone)]

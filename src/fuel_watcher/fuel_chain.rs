@@ -13,19 +13,16 @@ use fuels::{
 };
 use fuel_core_client::client::{
     FuelClient,
-    types::{ChainInfo},
+    types::ChainInfo,
     schema::tx::{
             OpaqueTransaction, TransactionStatus,
             transparent_receipt::ReceiptType,
         },
 };
 
-use fuels::prelude::{Provider, TransactionType};
-
 use async_trait::async_trait;
-use tokio::sync::Mutex;
 
-use std::{sync::Arc, collections::HashMap};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(test)]
@@ -311,62 +308,65 @@ impl FuelChainTrait for FuelChain {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use fuels::prelude::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuels::prelude::*;
 
-//     #[tokio::test]
-//     async fn test_check_connection() {
-//         // Start a local Fuel node
-//         let server = FuelService::start(Config::default()).await.unwrap();
+    #[tokio::test]
+    async fn test_check_connection() {
+        // Start a local Fuel node
+        let server = FuelService::start(Config::default()).await.unwrap();
+        let addr_str = format!("http://{}", server.bound_address());
 
-//         // Create a provider pointing to the local node
-//         let provider = Provider::from(server.bound_address()).await.unwrap();
-//         let provider = Arc::new(provider);
+        // Create a provider pointing to the local node
+        let provider = FuelClient::new(addr_str).unwrap();
+        let provider = Arc::new(provider);
 
-//         // Initialize the FuelChain with the local provider
-//         let fuel_chain = FuelChain::new(provider).unwrap();
+        // Initialize the FuelChain with the local provider
+        let fuel_chain = FuelChain::new(provider).unwrap();
 
-//         // Test the check_connection function
-//         assert!(fuel_chain.check_connection().await.is_ok());
-//     }
+        // Test the check_connection function
+        assert!(fuel_chain.check_connection().await.is_ok());
+    }
 
-//     #[tokio::test]
-//     async fn test_get_seconds_since_last_block() {
-//         // Start a local Fuel node
-//         let server = FuelService::start(Config::default()).await.unwrap();
+    #[tokio::test]
+    async fn test_get_seconds_since_last_block() {
+        // Start a local Fuel node
+        let server = FuelService::start(Config::default()).await.unwrap();
+        let addr_str = format!("http://{}", server.bound_address());
 
-//         // Create a provider pointing to the local node
-//         let provider = Provider::from(server.bound_address()).await.unwrap();
-//         let provider = Arc::new(provider);
+        // Create a provider pointing to the local node
+        let provider = FuelClient::new(addr_str).unwrap();
+        let provider = Arc::new(provider);
 
-//         // Initialize the FuelChain with the local provider
-//         let fuel_chain = FuelChain::new(provider).unwrap();
+        // Initialize the FuelChain with the local provider
+        let fuel_chain = FuelChain::new(provider).unwrap();
 
-//         // Test the get_seconds_since_last_block function
-//         let seconds_since_last_block = fuel_chain.get_seconds_since_last_block().await;
-//         assert!(seconds_since_last_block.is_ok());
+        // Test the get_seconds_since_last_block function
+        let seconds_since_last_block = fuel_chain.get_seconds_since_last_block().await;
+        assert!(seconds_since_last_block.is_ok());
 
-//         // Test that seconds is not 0
-//         let seconds = seconds_since_last_block.unwrap();
-//         assert_ne!(seconds, 0);
-//     }
+        // Test that seconds is not 0
+        let seconds = seconds_since_last_block.unwrap();
+        assert_ne!(seconds, 0);
+    }
 
-//     #[tokio::test]
-//     async fn test_fetch_chain_info() {
-//         // Start a local Fuel node
-//         let server = FuelService::start(Config::default()).await.unwrap();
+    #[tokio::test]
+    async fn test_fetch_chain_info() {
+        // Start a local Fuel node
+        let server = FuelService::start(Config::default()).await.unwrap();
+        let addr_str = format!("http://{}", server.bound_address());
 
-//         // Create a provider pointing to the local node
-//         let provider = Provider::from(server.bound_address()).await.unwrap();
-//         let provider = Arc::new(provider);
+        // Create a provider pointing to the local node
+        let provider = FuelClient::new(addr_str).unwrap();
+        let provider = Arc::new(provider);
 
-//         // Initialize the FuelChain with the local provider
-//         let fuel_chain = FuelChain::new(provider).unwrap();
+        // Initialize the FuelChain with the local provider
+        let fuel_chain = FuelChain::new(provider).unwrap();
 
-//         // Test fetch_chain_info
-//         let result = fuel_chain.fetch_chain_info().await;
-//         assert!(result.is_ok());
-//     }
-// }
+        // Test fetch_chain_info
+        let result = fuel_chain.fetch_chain_info().await;
+        assert!(result.is_ok());
+    }
+}

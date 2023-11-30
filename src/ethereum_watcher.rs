@@ -583,3 +583,422 @@ pub async fn start_ethereum_watcher(
 
     Ok(handle)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    use crate::{
+        ethereum_watcher::ethereum_chain::MockEthereumChainTrait,
+        ethereum_actions::EthereumAction,
+        config::*,
+    };
+    use ethers::types::U256;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    #[tokio::test]
+    async fn test_check_chain_connection_success() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+
+        // Simulate a scenario where the connection check succeeds
+        mock_ethereum_chain
+            .expect_check_connection()
+            .times(1)
+            .returning(|| Box::pin(async { Ok(()) }));
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            connection_alert: GenericAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_chain_connection(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
+
+        // Check that no alert or action was sent
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent on successful connection check");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent on successful connection check");
+    }
+
+    #[tokio::test]
+    async fn test_check_chain_connection_alert_level_none() {
+        let mock_ethereum_chain = MockEthereumChainTrait::new();
+        
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+    
+        let watch_config = EthereumClientWatcher {
+            connection_alert: GenericAlert {
+                alert_level: AlertLevel::None,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+    
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_chain_connection(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
+    
+        // Check that no alert or action was sent
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent when alert level is None");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent when alert level is None");
+    }
+
+    #[tokio::test]
+    async fn test_check_chain_connection_fails() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+    
+        // Simulate a scenario where the connection check fails
+        mock_ethereum_chain
+            .expect_check_connection()
+            .times(1)
+            .returning(|| {
+                Box::pin(async {
+                    Err(anyhow::anyhow!("connection failed"))
+                })
+            });
+    
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            connection_alert: GenericAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+    
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_chain_connection(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
+    
+        // Check if the alert was sent
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Failed to check ethereum connection"));
+            assert!(alert.is_description_equal("Failed to check ethereum connection: connection failed"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+    }
+    
+    #[tokio::test]
+    async fn test_check_block_production_success() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+
+        // Simulate a scenario where the block production is within the time limit
+        mock_ethereum_chain
+            .expect_get_seconds_since_last_block()
+            .times(1)
+            .returning(|| Box::pin(async { Ok(10) }));
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            block_production_alert: BlockProductionAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+                max_block_time: 20, // 20 seconds time limit
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_block_production(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
+
+        // Check that no alert or action was sent
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent for successful block production");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent for successful block production");
+    }
+
+    #[tokio::test]
+    async fn test_check_block_production_delay() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+    
+        // Simulate a scenario where the block production time exceeds the limit
+        mock_ethereum_chain
+            .expect_get_seconds_since_last_block()
+            .times(1)
+            .returning(|| Box::pin(async { Ok(25) }));
+    
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+    
+        let watch_config = EthereumClientWatcher {
+            block_production_alert: BlockProductionAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+                max_block_time: 20, // 20 seconds time limit
+            },
+            ..Default::default()
+        };
+    
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_block_production(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
+    
+        // Check if the alert was sent
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Ethereum block is taking long"));
+            assert!(alert.is_description_equal("Next ethereum block is taking longer than 20 seconds. Last block was 25 seconds ago."));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+    }
+    
+    #[tokio::test]
+    async fn test_check_block_production_failure() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+
+        // Simulate a failure in checking block production
+        mock_ethereum_chain
+            .expect_get_seconds_since_last_block()
+            .times(1)
+            .returning(|| Box::pin(async { Err(anyhow::anyhow!("Failed to get block time")) }));
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            block_production_alert: BlockProductionAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+                max_block_time: 20,
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_block_production(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
+
+        // Check if the alert was sent
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Failed to check ethereum block"));
+            assert!(alert.is_description_equal("Failed to check ethereum block production: Failed to get block time"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_block_production_alert_level_none() {
+        let mock_ethereum_chain = MockEthereumChainTrait::new();
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            block_production_alert: BlockProductionAlert {
+                alert_level: AlertLevel::None,
+                alert_action: EthereumAction::None,
+                max_block_time: 20,
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_block_production(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
+
+        // Check that no alert or action was sent
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent when alert level is None");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent when alert level is None");
+    }
+
+    #[tokio::test]
+    async fn test_check_account_balance_success() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+
+        // Simulate a scenario where the account balance is above the minimum required balance
+        let account_address = Some("0x123".to_string());
+        let account_address_clone = account_address.clone();
+        let balance_above_minimum = get_value(
+            100.0,
+            18,
+        );
+        mock_ethereum_chain
+            .expect_get_account_balance()
+            .withf(move |addr| addr == account_address.as_ref().unwrap())
+            .times(1)
+            .returning(move |_| Box::pin(async move { Ok(balance_above_minimum) }));
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            account_funds_alert: AccountFundsAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+                min_balance: 10.into(),
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_account_balance(&ethereum_chain, action_sender, alert_sender, &watch_config, &account_address_clone).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent if balance is above minimum");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent if balance is above minimum");
+    }
+
+    #[tokio::test]
+    async fn test_check_account_balance_below_minimum() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+
+        // Simulate a scenario where the account balance is below the minimum required balance
+        let account_address = Some("0x123".to_string());
+        let account_address_clone = account_address.clone();
+        let balance_below_minimum = U256::from(500);
+        mock_ethereum_chain
+            .expect_get_account_balance()
+            .withf(move |addr| addr == account_address.as_ref().unwrap())
+            .times(1)
+            .returning(move |_| Box::pin(async move { Ok(balance_below_minimum) }));
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            account_funds_alert: AccountFundsAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+                min_balance: 1000.into(),
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_account_balance(&ethereum_chain, action_sender, alert_sender, &watch_config, &account_address_clone).await;
+
+        // Check if the alert was sent
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Ethereum account low on funds"));
+            assert!(alert.is_description_equal("Ethereum account (0x123) is low on funds. Current balance: 500"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_account_balance_alert_level_none() {
+        let mock_ethereum_chain = MockEthereumChainTrait::new();
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let account_address = Some("0x123".to_string());
+        let watch_config = EthereumClientWatcher {
+            account_funds_alert: AccountFundsAlert {
+                alert_level: AlertLevel::None,
+                alert_action: EthereumAction::None,
+                min_balance: 1000.into(),
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        check_account_balance(&ethereum_chain, action_sender, alert_sender, &watch_config, &account_address).await;
+
+        // Check that
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent when alert level is None");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent when alert level is None");
+    }
+}
