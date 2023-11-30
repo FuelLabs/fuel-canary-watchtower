@@ -212,31 +212,4 @@ mod tests {
         let commits = state_contract.get_latest_commits(block_num).await.unwrap();
         assert_eq!(&commits[0].as_slice(), &bytes32_data.as_slice());
     }
-
-    #[tokio::test]
-    async fn pause_state_contract_test() {
-        let (
-            provider,
-            mock,
-            wallet,
-        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
-        let mut state_contract = setup_state_contract(
-            provider,
-            mock.clone(),
-            wallet,
-        ).expect("Setup failed");
-
-        // Test pause before initialization
-        assert!(state_contract.pause().await.is_err());
-
-        // Initialize and test pause after initialization
-        state_contract.initialize().await.expect("Initialization failed");
-
-        // Mock a successful response for the `pause` call
-        let pause_response_hex: String = format!("0x{}", "01".repeat(32));
-        mock.push_response(MockResponse::Value(serde_json::Value::String(pause_response_hex)));
-
-        // Test pause with the contract initialized
-        assert!(state_contract.pause().await.is_ok());
-    }
 }

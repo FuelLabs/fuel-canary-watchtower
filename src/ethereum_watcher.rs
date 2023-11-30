@@ -172,11 +172,9 @@ async fn check_invalid_commits(
     fuel_chain: &Arc<dyn FuelChainTrait>,
     last_commit_check_block: &mut u64,
 ) {
-
-    if watch_config.account_funds_alert.alert_level == AlertLevel::None {
+    if watch_config.invalid_state_commit_alert.alert_level == AlertLevel::None {
         return;
     }
-
     let hashes = match state_contract.get_latest_commits(
         *last_commit_check_block,
     ).await {
@@ -231,7 +229,6 @@ async fn check_invalid_commits(
             }
         }
     }
-
     *last_commit_check_block = match ethereum_chain.get_latest_block_number().await {
         Ok(block_num) => block_num,
         Err(_) => *last_commit_check_block,
@@ -589,11 +586,12 @@ mod tests {
     use super::*;
     
     use crate::{
-        ethereum_watcher::ethereum_chain::MockEthereumChainTrait,
+        ethereum_watcher::{ethereum_chain::MockEthereumChainTrait, state_contract::MockStateContractTrait},
         ethereum_actions::EthereumAction,
-        config::*,
+        config::*, fuel_watcher::fuel_chain::MockFuelChainTrait,
     };
     use ethers::types::U256;
+    use fuels::tx::Bytes32;
     use tokio::sync::mpsc::unbounded_channel;
 
     #[tokio::test]
@@ -1001,4 +999,276 @@ mod tests {
         assert!(alert_receiver.try_recv().is_err(), "No alert should be sent when alert level is None");
         assert!(action_receiver.try_recv().is_err(), "No action should be sent when alert level is None");
     }
+
+    #[tokio::test]
+    async fn test_check_invalid_commits_all_valid() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+        let mut mock_state_contract = MockStateContractTrait::new();
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+
+        let expected_commit = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
+        let commit_hashes = vec![expected_commit];
+        let state_hashes = commit_hashes.clone();
+        let latest_block_number = 100;
+
+        // Mock state contract to return commit hashes
+        mock_state_contract
+        .expect_get_latest_commits()
+            .times(1)
+            .returning(move |_| {
+                let commit_hashes_clone = state_hashes.clone();
+                Box::pin(async move { Ok(commit_hashes_clone) })
+            });
+
+        // Mock fuel chain to return true for commit verification
+        for hash in &commit_hashes {
+            let hash_clone = *hash;
+            mock_fuel_chain
+                .expect_verify_block_commit()
+                .withf(move |h| *h == hash_clone)
+                .times(1)
+                .returning(move |_| Box::pin(async move { Ok(true) }));
+        }
+
+        // Mock ethereum chain to return the latest block number
+        mock_ethereum_chain
+            .expect_get_latest_block_number()
+            .times(1)
+            .returning(move || Box::pin(async move { Ok(latest_block_number) }));
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            invalid_state_commit_alert: GenericAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        let state_contract = Arc::new(mock_state_contract) as Arc<dyn StateContractTrait>;
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        let mut last_commit_check_block = 0;
+
+        check_invalid_commits(&ethereum_chain, &state_contract, action_sender, alert_sender,
+                                &watch_config, &fuel_chain, &mut last_commit_check_block).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent when all commits are valid");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent when all commits are valid");
+        assert_eq!(last_commit_check_block, latest_block_number, "Last commit check block should be updated");
+    }
+
+    #[tokio::test]
+    async fn test_check_invalid_commits_some_invalid() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+        let mut mock_state_contract = MockStateContractTrait::new();
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+
+        let valid_commit = Bytes32::default();
+        let invalid_commit = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
+        let commit_hashes = vec![valid_commit, invalid_commit];
+        let state_hashes = commit_hashes.clone();
+        let latest_block_number = 100;
+
+        mock_state_contract
+        .expect_get_latest_commits()
+            .times(1)
+            .returning(move |_| {
+                let commit_hashes_clone = state_hashes.clone();
+                Box::pin(async move { Ok(commit_hashes_clone) })
+            });
+
+        for hash in &commit_hashes {
+            let hash_clone = *hash;
+            let validity = hash_clone != invalid_commit;
+            mock_fuel_chain
+                .expect_verify_block_commit()
+                .withf(move |h| *h == hash_clone)
+                .times(1)
+                .returning(move |_| Box::pin(async move { Ok(validity) }));
+        }
+
+        mock_ethereum_chain
+            .expect_get_latest_block_number()
+            .times(1)
+            .returning(move || Box::pin(async move { Ok(latest_block_number) }));
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            invalid_state_commit_alert: GenericAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        let state_contract = Arc::new(mock_state_contract) as Arc<dyn StateContractTrait>;
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        let mut last_commit_check_block = 0;
+
+        check_invalid_commits(&ethereum_chain, &state_contract, action_sender, alert_sender,
+                                &watch_config, &fuel_chain, &mut last_commit_check_block).await;
+
+        // Check if the alert was sent
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            println!("{:?}", alert);
+            assert!(alert.is_name_equal("Invalid commit was made on the state contract"));
+            assert!(alert.is_description_equal("An invalid commit was made on the state contract. Hash: c84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+        assert_eq!(last_commit_check_block, latest_block_number, "Last commit check block should be updated");
+    }
+
+    #[tokio::test]
+    async fn test_check_invalid_commits_no_commits() {
+        let mut mock_ethereum_chain = MockEthereumChainTrait::new();
+        let mut mock_state_contract = MockStateContractTrait::new();
+        let mock_fuel_chain = MockFuelChainTrait::new();
+
+        // Simulate an empty list of commit hashes
+        let commit_hashes = Vec::new();
+        let latest_block_number = 100;
+
+        mock_state_contract
+        .expect_get_latest_commits()
+            .times(1)
+            .returning(move |_| {
+                let commit_hashes_clone = commit_hashes.clone();
+                Box::pin(async move { Ok(commit_hashes_clone) })
+            });
+
+        // Since there are no commits, the fuel chain's commit verification won't be called
+        // We don't need to set up expectations for the mock_fuel_chain
+
+        mock_ethereum_chain
+            .expect_get_latest_block_number()
+            .times(1)
+            .returning(move || Box::pin(async move { Ok(latest_block_number) }));
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            invalid_state_commit_alert: GenericAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        let state_contract = Arc::new(mock_state_contract) as Arc<dyn StateContractTrait>;
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        let mut last_commit_check_block = 0;
+
+        check_invalid_commits(&ethereum_chain, &state_contract, action_sender, alert_sender,
+                                &watch_config, &fuel_chain, &mut last_commit_check_block).await;
+
+        // Assert that no alert or action was sent since there were no commits
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent when there are no commits");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent when there are no commits");
+
+        // Assert that the last commit check block is updated to the latest block number
+        assert_eq!(last_commit_check_block, latest_block_number, "Last commit check block should be updated to the latest block number");
+    }
+
+    #[tokio::test]
+    async fn test_check_invalid_commits_state_contract_error() {
+        let mock_ethereum_chain = MockEthereumChainTrait::new();
+        let mut mock_state_contract = MockStateContractTrait::new();
+        let mock_fuel_chain = MockFuelChainTrait::new();
+
+        // Simulate an error in fetching commit hashes
+        let state_contract_error = "Error fetching commits";
+        mock_state_contract
+            .expect_get_latest_commits()
+            .times(1)
+            .returning(move |_| {
+                Box::pin(async move { 
+                    Err(anyhow::anyhow!(state_contract_error))
+                })
+            });
+
+        // Since there's an error in fetching commits, the fuel chain's commit verification won't be called
+        // We don't need to set up expectations for the mock_fuel_chain
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            invalid_state_commit_alert: GenericAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        let state_contract = Arc::new(mock_state_contract) as Arc<dyn StateContractTrait>;
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        let mut last_commit_check_block = 0;
+
+        check_invalid_commits(&ethereum_chain, &state_contract, action_sender, alert_sender,
+                                &watch_config, &fuel_chain, &mut last_commit_check_block).await;
+
+        // Assert that an alert was sent due to the error in fetching commits
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Failed to check state contract"));
+            assert!(alert.is_description_equal("Failed to check state contract commits: Error fetching commits"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for state contract error was not sent");
+        }
+
+        // Assert that an action was sent due to the error in fetching commits
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for state contract error was not sent");
+        }
+
+        // No change in last commit check block as there was an error
+        assert_eq!(last_commit_check_block, 0, "Last commit check block should not change on error");
+    }
+
 }

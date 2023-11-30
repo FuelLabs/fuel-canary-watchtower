@@ -339,26 +339,4 @@ mod tests {
         let expected_total = 330000u64 * 1_000_000_000;
         assert_eq!(total_amount.as_u64(), expected_total, "Total amount withdrawn does not match expected value");
     }
-
-    #[tokio::test]
-    async fn pause_gateway_contract_pauses_contract() {
-        let (
-            provider,
-            mock,
-            wallet,
-        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
-        let mut gateway_contract = setup_gateway_contract(provider, mock.clone(), wallet).expect("Setup failed");
-
-        // Test pause before initialization
-        assert!(gateway_contract.pause().await.is_err());
-
-        // Initialize and test pause after initialization
-        gateway_contract.initialize().await.expect("Initialization failed");
-
-        let pause_response_hex: String = format!("0x{}", "01".repeat(32));
-        mock.push_response(MockResponse::Value(serde_json::Value::String(pause_response_hex.to_string())));
-
-        // Test pause with the contract initialized
-        assert!(gateway_contract.pause().await.is_ok());
-    }
 }

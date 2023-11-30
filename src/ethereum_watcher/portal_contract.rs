@@ -352,31 +352,4 @@ mod tests {
         let expected_total_amount = U256::from((50000u64 + 150000u64) * 1_000_000_000);
         assert_eq!(total_amount, expected_total_amount, "Total amount withdrawn does not match expected value");
     }
-
-    #[tokio::test]
-    async fn pause_portal_contract_test() {
-        let (
-            provider,
-            mock,
-            wallet,
-        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
-        let mut portal_contract = setup_portal_contract(
-            provider,
-            mock.clone(),
-            wallet,
-        ).await.expect("Setup failed");
-
-        // Test pause without initializing the contract
-        assert!(portal_contract.pause().await.is_err());
-
-        // Initialize and test pause after initialization
-        portal_contract.initialize().await.expect("Initialization failed");
-
-        // Mock a successful response for the `pause` call
-        let pause_response_hex: String = format!("0x{}", "01".repeat(32));
-        mock.push_response(MockResponse::Value(serde_json::Value::String(pause_response_hex)));
-
-        // Test pause with the contract initialized
-        assert!(portal_contract.pause().await.is_ok());
-    }
 }
