@@ -17,7 +17,7 @@ pub mod fuel_chain;
 pub mod fuel_utils;
 pub mod extended_provider;
 
-pub static POLL_DURATION: Duration = Duration::from_millis(10000);
+pub static POLL_DURATION: Duration = Duration::from_millis(4000);
 pub static POLL_LOGGING_SKIP: u64 = 75;
 pub static FUEL_CONNECTION_RETRIES: u64 = 2;
 pub static FUEL_BLOCK_TIME: u64 = 1;

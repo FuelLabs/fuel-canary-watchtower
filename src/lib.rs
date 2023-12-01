@@ -5,7 +5,7 @@ mod alerter;
 mod config;
 mod pagerduty;
 mod ethereum_actions;
-pub(crate) mod ethereum_watcher;
+mod ethereum_watcher;
 mod fuel_watcher;
 
 use std::sync::Arc;
