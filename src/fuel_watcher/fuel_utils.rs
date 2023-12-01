@@ -1,9 +1,7 @@
 use std::sync::Arc;
 use anyhow::{Result, anyhow};
-use fuels::prelude::Provider;
 use fuel_core_client::client::{
     FuelClient,
-    types::ChainInfo,
 };
 
 pub async fn setup_fuel_provider(fuels_graphql: &str) -> Result<Arc<FuelClient>> {
