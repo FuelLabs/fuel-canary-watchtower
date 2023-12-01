@@ -3,3 +3,4 @@
 watchtower_config.json
 .env
 .vscode
+.idea
