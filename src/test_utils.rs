@@ -90,7 +90,6 @@ pub mod test_utils {
     pub fn setup_watchtower_alerter() -> Result<WatchtowerAlerter, anyhow::Error> {
         // Create a mock configuration for WatchtowerAlerter
         let config = WatchtowerConfig {
-            alert_cache_size: 10,
             alert_cache_expiry: Duration::from_secs(300),
             watchtower_system_name: "TestSystem".to_string(),
             // Add other necessary configuration fields if needed

@@ -190,7 +190,6 @@ mod watchtower_alerter_tests {
     async fn test_watchtower_alerter_initialization() {
         // Create a mock configuration for WatchtowerAlerter
         let config = WatchtowerConfig {
-            alert_cache_size: 10,
             alert_cache_expiry: Duration::from_secs(300),
             watchtower_system_name: "TestSystem".to_string(),
             ..Default::default()
@@ -219,7 +218,6 @@ mod watchtower_alerter_tests {
     async fn test_alert_sending_different_levels() {
         // Create a mock configuration for WatchtowerAlerter
         let config = WatchtowerConfig {
-            alert_cache_size: 10,
             alert_cache_expiry: Duration::from_secs(300),
             watchtower_system_name: "TestSystem".to_string(),
             min_duration_from_start_to_err: Duration::from_secs(0),
@@ -293,7 +291,6 @@ mod watchtower_alerter_tests {
     #[tokio::test]
     async fn test_alert_caching_and_expiry() {
         let config = WatchtowerConfig {
-            alert_cache_size: 10,
             alert_cache_expiry: Duration::from_secs(1),
             watchtower_system_name: "TestSystem".to_string(),
             min_duration_from_start_to_err: Duration::from_secs(0),
@@ -348,7 +345,6 @@ mod watchtower_alerter_tests {
     #[tokio::test]
     async fn test_no_alerts_sent_before_start_time() {
         let config = WatchtowerConfig {
-            alert_cache_size: 10,
             alert_cache_expiry: Duration::from_secs(1),
             watchtower_system_name: "TestSystem".to_string(),
             min_duration_from_start_to_err: Duration::from_secs(300),
