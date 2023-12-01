@@ -341,7 +341,7 @@ async fn check_base_asset_withdrawals(
         if amount >= amount_threshold {
             send_alert(
                 &alert_sender,
-                String::from("Ethereum Chain: Base asset is above withdrawal threshold."),
+                String::from("Ethereum Chain: Base asset is above withdrawal threshold"),
                 format!(
                     "Base asset withdrawal threshold of {} over {} seconds has been exceeded. Amount withdrawn: {}",
                     amount_threshold, time_frame, amount
@@ -1567,4 +1567,213 @@ mod tests {
         assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
         assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
     }
+
+    #[tokio::test]
+    async fn test_withdrawal_amount_triggers_alert() {
+        let mut mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let threshold = get_value(150.0, 18);
+        let watch_config = EthereumClientWatcher {
+            portal_withdrawal_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Mock portal contract response
+        mock_portal_contract
+            .expect_get_base_amount_withdrawn()
+            .times(1)
+            .returning(move |_, _| {
+                Box::pin(async move { Ok(threshold) })
+            });
+
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block = 100;
+
+        check_base_asset_withdrawals(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure alert and action are triggered
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Ethereum Chain: Base asset is above withdrawal threshold"));
+            assert!(alert.is_description_equal("Base asset withdrawal threshold of 100000000000000000000 over 60 seconds has been exceeded. Amount withdrawn: 150000000000000000000"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for failed deposit check was not sent");
+        }
+    
+        // Assert that an action was sent due to the error
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for failed deposit check was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_failed_withdrawal_check() {
+        let mut mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            portal_withdrawal_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Mock portal contract response to simulate an error
+        mock_portal_contract
+            .expect_get_base_amount_withdrawn()
+            .times(1)
+            .returning(move |_, _| {
+                Box::pin(async move { 
+                    Err(anyhow::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "mock error"))) 
+                })
+            });
+
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block: u64 = 100;
+
+        check_base_asset_withdrawals(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure alert and action are triggered due to error
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Failed to check portal contract for base asset withdrawals"));
+            assert!(alert.is_description_equal("Failed to check base asset withdrawals: mock error"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for failed withdrawals check was not sent");
+        }
+    
+        // Assert that an action was sent due to the error
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for failed withdrawals check was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_no_withdrawal_alerts_configured() {
+        let mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            portal_withdrawal_alerts: vec![],
+            ..Default::default()
+        };
+
+        // No need to mock portal_contract response as it should not be called
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block: u64 = 100;
+
+        check_base_asset_withdrawals(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+
+    #[tokio::test]
+    async fn test_withdrawal_amount_alert_level_none() {
+        let mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            portal_withdrawal_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::None,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block: u64 = 100;
+
+        check_base_asset_withdrawals(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+
 }
