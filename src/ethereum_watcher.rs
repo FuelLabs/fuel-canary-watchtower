@@ -27,7 +27,6 @@ pub mod portal_contract;
 pub mod ethereum_utils;
 
 pub static POLL_DURATION: Duration = Duration::from_millis(6000);
-pub static POLL_LOGGING_SKIP: u64 = 50;
 pub static COMMIT_CHECK_STARTING_OFFSET: u64 = 24 * 60 * 60;
 pub static ETHEREUM_CONNECTION_RETRIES: u64 = 2;
 pub static ETHEREUM_BLOCK_TIME: u64 = 12;
@@ -539,42 +538,39 @@ pub async fn start_ethereum_watcher(
 
     let handle = tokio::spawn(async move {
         loop {
-            for _ in 0..POLL_LOGGING_SKIP {
+            send_alert(
+                &alert_sender.clone(),
+                String::from("Watching ethereum chain."),
+                String::from("Periodically querying the ethereum chain."),
+                AlertLevel::Info,
+            );
 
-                send_alert(
-                    &alert_sender.clone(),
-                    String::from("Watching ethereum chain."),
-                    String::from("Periodically querying the ethereum chain."),
-                    AlertLevel::Info,
-                );
+            check_chain_connection(&ethereum_chain, action_sender.clone(),
+                                    alert_sender.clone(), &watch_config).await;
 
-                check_chain_connection(&ethereum_chain, action_sender.clone(),
-                                        alert_sender.clone(), &watch_config).await;
+            check_block_production(&ethereum_chain, action_sender.clone(),
+                                    alert_sender.clone(), &watch_config).await;
 
-                check_block_production(&ethereum_chain, action_sender.clone(),
-                                        alert_sender.clone(), &watch_config).await;
+            check_account_balance(&ethereum_chain, action_sender.clone(),
+                                    alert_sender.clone(), &watch_config, &account_address).await;
 
-                check_account_balance(&ethereum_chain, action_sender.clone(),
-                                      alert_sender.clone(), &watch_config, &account_address).await;
+            check_invalid_commits(&ethereum_chain, &state_contract, action_sender.clone(),
+                                    alert_sender.clone(), &watch_config, &fuel_chain, 
+                                    &mut last_commit_check_block).await;
 
-                check_invalid_commits(&ethereum_chain, &state_contract, action_sender.clone(),
-                                        alert_sender.clone(), &watch_config, &fuel_chain, 
-                                        &mut last_commit_check_block).await;
+            check_base_asset_deposits(&portal_contract, action_sender.clone(), alert_sender.clone(),
+                                        &watch_config, &last_commit_check_block).await;
 
-                check_base_asset_deposits(&portal_contract, action_sender.clone(), alert_sender.clone(),
+            check_base_asset_withdrawals(&portal_contract, action_sender.clone(), alert_sender.clone(),
                                             &watch_config, &last_commit_check_block).await;
 
-                check_base_asset_withdrawals(&portal_contract, action_sender.clone(), alert_sender.clone(),
-                                                &watch_config, &last_commit_check_block).await;
+            check_token_deposits(&gateway_contract, action_sender.clone(), alert_sender.clone(),
+                                    &watch_config, last_commit_check_block).await;
 
-                check_token_deposits(&gateway_contract, action_sender.clone(), alert_sender.clone(),
-                                      &watch_config, last_commit_check_block).await;
+            check_token_withdrawals(&gateway_contract, action_sender.clone(), alert_sender.clone(),
+                                    &watch_config, last_commit_check_block).await;
 
-                check_token_withdrawals(&gateway_contract, action_sender.clone(), alert_sender.clone(),
-                                        &watch_config, last_commit_check_block).await;
-
-                thread::sleep(POLL_DURATION);
-            }
+            thread::sleep(POLL_DURATION);
         }
     });
 
