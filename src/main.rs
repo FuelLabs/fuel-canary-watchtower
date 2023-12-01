@@ -24,7 +24,7 @@ async fn main() {
 fn setup_logging() {
     log4rs::init_file(
         LOGGING_CONFIG_FILE,
-         Default::default(),
+        Default::default(),
     ).expect("Failed to initialize logging");
 }
 
