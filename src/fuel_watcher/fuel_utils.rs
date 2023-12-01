@@ -5,7 +5,7 @@ use fuel_core_client::client::{
 };
 
 pub async fn setup_fuel_provider(fuels_graphql: &str) -> Result<Arc<FuelClient>> {
-    let provider = FuelClient::new(&fuels_graphql).unwrap();
+    let provider = FuelClient::new(fuels_graphql).unwrap();
     let provider_result = provider.chain_info().await;
     match provider_result {
         Ok(_) => Ok(Arc::new(provider)),

@@ -81,7 +81,7 @@ impl FuelChainTrait for FuelChain {
     
         let current_timestamp = SystemTime::now().duration_since(
             UNIX_EPOCH,
-        )?.as_secs() as u64;
+        )?.as_secs();
     
         if current_timestamp < last_block_timestamp {
             return Err(anyhow::anyhow!("Block time is ahead of current time"));
@@ -277,7 +277,7 @@ impl FuelChainTrait for FuelChain {
                         
                 let token = ABIDecoder::default().decode(
                     &WithdrawalEvent::param_type(),
-                    &data,
+                    data,
                 )?;
 
                 let withdrawal_event: WithdrawalEvent = WithdrawalEvent::from_token(token)?;

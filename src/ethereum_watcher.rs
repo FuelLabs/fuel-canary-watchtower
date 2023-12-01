@@ -693,7 +693,7 @@ mod tests {
         check_chain_connection(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
     
         // Check if the alert was sent
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Failed to check ethereum connection"));
             assert!(alert.is_description_equal("Failed to check ethereum connection: connection failed"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -702,7 +702,7 @@ mod tests {
         }
 
         // Check if the action was sent
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -778,7 +778,7 @@ mod tests {
         check_block_production(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
     
         // Check if the alert was sent
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum block is taking long"));
             assert!(alert.is_description_equal("Next ethereum block is taking longer than 20 seconds. Last block was 25 seconds ago."));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -787,7 +787,7 @@ mod tests {
         }
 
         // Check if the action was sent
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -827,7 +827,7 @@ mod tests {
         check_block_production(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
 
         // Check if the alert was sent
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Failed to check ethereum block"));
             assert!(alert.is_description_equal("Failed to check ethereum block production: Failed to get block time"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -836,7 +836,7 @@ mod tests {
         }
 
         // Check if the action was sent
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -952,7 +952,7 @@ mod tests {
         check_account_balance(&ethereum_chain, action_sender, alert_sender, &watch_config, &account_address_clone).await;
 
         // Check if the alert was sent
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum account low on funds"));
             assert!(alert.is_description_equal("Ethereum account (0x123) is low on funds. Current balance: 500"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -961,7 +961,7 @@ mod tests {
         }
 
         // Check if the action was sent
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -1127,7 +1127,7 @@ mod tests {
                                 &watch_config, &fuel_chain, &mut last_commit_check_block).await;
 
         // Check if the alert was sent
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Invalid commit was made on the state contract"));
             assert!(alert.is_description_equal("An invalid commit was made on the state contract. Hash: c84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1136,7 +1136,7 @@ mod tests {
         }
 
         // Check if the action was sent
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -1250,7 +1250,7 @@ mod tests {
                                 &watch_config, &fuel_chain, &mut last_commit_check_block).await;
 
         // Assert that an alert was sent due to the error in fetching commits
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Failed to check state contract"));
             assert!(alert.is_description_equal("Failed to check state contract commits: Error fetching commits"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1259,7 +1259,7 @@ mod tests {
         }
 
         // Assert that an action was sent due to the error in fetching commits
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -1408,7 +1408,7 @@ mod tests {
         ).await;
 
         // Assertions to ensure alert and action are triggered
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: Base asset is above deposit threshold"));
             assert!(alert.is_description_equal("Base asset deposit threshold of 100000000000000000000 over 60 seconds has been reached. Amount deposited: 150000000000000000000"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1417,7 +1417,7 @@ mod tests {
         }
 
         // Assert that an action was sent due to the error in fetching commits
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -1474,7 +1474,7 @@ mod tests {
         ).await;
 
         // Assertions to ensure alert and action are triggered due to error
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Failed to check portal contract for base asset deposits"));
             assert!(alert.is_description_equal("Failed to check base asset deposits: mock error"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1483,7 +1483,7 @@ mod tests {
         }
     
         // Assert that an action was sent due to the error
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -1616,7 +1616,7 @@ mod tests {
         ).await;
 
         // Assertions to ensure alert and action are triggered
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: Base asset is above withdrawal threshold"));
             assert!(alert.is_description_equal("Base asset withdrawal threshold of 100000000000000000000 over 60 seconds has been exceeded. Amount withdrawn: 150000000000000000000"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1625,7 +1625,7 @@ mod tests {
         }
     
         // Assert that an action was sent due to the error
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -1682,7 +1682,7 @@ mod tests {
         ).await;
 
         // Assertions to ensure alert and action are triggered due to error
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Failed to check portal contract for base asset withdrawals"));
             assert!(alert.is_description_equal("Failed to check base asset withdrawals: mock error"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1691,7 +1691,7 @@ mod tests {
         }
     
         // Assert that an action was sent due to the error
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -1823,7 +1823,7 @@ mod tests {
         ).await;
 
         // Assertions to ensure alert and action are triggered
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: ERC20 USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above deposit threshold"));
             assert!(alert.is_description_equal("ERC20 deposit threshold of 100000000000000000000USDC over 60 seconds has been reached. Amount deposited: 150000000000000000000USDC"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1832,7 +1832,7 @@ mod tests {
         }
 
         // Assert that an action was sent due to the error in fetching commits
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -1940,7 +1940,7 @@ mod tests {
         ).await;
 
         // Assertions to ensure alert and action are triggered due to error
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Failed to check ERC20 deposits USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
             assert!(alert.is_description_equal("Failed to check ERC20 deposits: mock error"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1949,7 +1949,7 @@ mod tests {
         }
 
         // Assert that an action was sent due to the error in fetching commits
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -2037,7 +2037,7 @@ mod tests {
         ).await;
 
         // Assertions to ensure alert and action are triggered
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: ERC20 USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above withdrawal threshold"));
             assert!(alert.is_description_equal("ERC20 withdrawal threshold of 100000000000000000000USDC over 60 seconds has been reached. Amount withdrawn: 150000000000000000000USDC"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -2046,7 +2046,7 @@ mod tests {
         }
 
         // Assert that an action was sent due to the error in fetching commits
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
@@ -2087,7 +2087,7 @@ mod tests {
             .expect_get_token_amount_withdrawn()
             .times(1)
             .returning(move |_, _, _| {
-                Box::pin(async move { Ok(U256::from(amount_below_threshold)) })
+                Box::pin(async move { Ok(amount_below_threshold) })
             });
     
         let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
@@ -2155,7 +2155,7 @@ mod tests {
         ).await;
     
         // Assertions to ensure alert and action are triggered due to error
-        if let Some(alert) = alert_receiver.try_recv().ok() {
+        if let Ok(alert) = alert_receiver.try_recv() {
             println!("{:?}", alert);
             assert!(alert.is_name_equal("Ethereum Chain: Failed to check ERC20 withdrawals USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
             assert!(alert.is_description_equal("Failed to check ERC20 withdrawals: mock error"));
@@ -2164,7 +2164,7 @@ mod tests {
             panic!("Alert for failed withdrawal check was not sent");
         }
     
-        if let Some(action) = action_receiver.try_recv().ok() {
+        if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
             assert!(action.is_alert_level_equal(AlertLevel::Warn));
         } else {
