@@ -586,7 +586,7 @@ mod tests {
     use super::*;
     
     use crate::{
-        ethereum_watcher::{ethereum_chain::MockEthereumChainTrait, state_contract::MockStateContractTrait, portal_contract::MockPortalContractTrait},
+        ethereum_watcher::{ethereum_chain::MockEthereumChainTrait, state_contract::MockStateContractTrait, portal_contract::MockPortalContractTrait, gateway_contract::MockGatewayContractTrait},
         ethereum_actions::EthereumAction,
         config::*, fuel_watcher::fuel_chain::MockFuelChainTrait,
     };
@@ -1308,7 +1308,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_successful_deposit_check_no_alert() {
+    async fn test_portal_successful_deposit_check_no_alert() {
         let mut mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1358,7 +1358,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_deposit_amount_triggers_alert() {
+    async fn test_portal_deposit_amount_triggers_alert() {
         let mut mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1426,7 +1426,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_failed_deposit_check() {
+    async fn test_portal_failed_deposit_check() {
         let mut mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1492,7 +1492,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_no_deposit_alerts_configured() {
+    async fn test_portal_no_deposit_alerts_configured() {
         let mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1526,7 +1526,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_deposit_amount_alert_level_none() {
+    async fn test_portal_deposit_amount_alert_level_none() {
         let mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1569,7 +1569,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_withdrawal_amount_triggers_alert() {
+    async fn test_portal_withdrawal_amount_triggers_alert() {
         let mut mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1634,7 +1634,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_failed_withdrawal_check() {
+    async fn test_portal_failed_withdrawal_check() {
         let mut mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1700,7 +1700,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_no_withdrawal_alerts_configured() {
+    async fn test_portal_no_withdrawal_alerts_configured() {
         let mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1734,7 +1734,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_withdrawal_amount_alert_level_none() {
+    async fn test_portal_withdrawal_amount_alert_level_none() {
         let mock_portal_contract = MockPortalContractTrait::new();
         let (
             action_sender,
@@ -1769,6 +1769,220 @@ mod tests {
             alert_sender,
             &watch_config,
             &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+
+    #[tokio::test]
+    async fn test_gateway_token_deposit_amount_triggers_alert() {
+        let mut mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let threshold = get_value(150.0, 18);
+        let watch_config = EthereumClientWatcher {
+            gateway_deposit_alerts: vec![
+                DepositAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        mock_gateway_contract
+            .expect_get_token_amount_deposited()
+            .times(1)
+            .returning(move |_, _, _| {
+                Box::pin(async move { Ok(threshold) })
+            });
+
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+
+        check_token_deposits(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure alert and action are triggered
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Ethereum Chain: ERC20 USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above deposit threshold"));
+            assert!(alert.is_description_equal("ERC20 deposit threshold of 100000000000000000000USDC over 60 seconds has been reached. Amount deposited: 150000000000000000000USDC"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for gateway contract error was not sent");
+        }
+
+        // Assert that an action was sent due to the error in fetching commits
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for gateway contract error was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_gateway_successful_token_deposit_check_no_alert() {
+        let mut mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            gateway_deposit_alerts: vec![
+                DepositAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Mocking the response to be below the threshold
+        mock_gateway_contract
+            .expect_get_token_amount_deposited()
+            .times(1)
+            .returning(move |_, _, _| {
+                Box::pin(async move { Ok(U256::from(50)) })
+            });
+
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+
+        check_token_deposits(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+
+    #[tokio::test]
+    async fn test_gateway_failed_token_deposit_check() {
+        let mut mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            gateway_deposit_alerts: vec![
+                DepositAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Mocking an error response
+        mock_gateway_contract
+            .expect_get_token_amount_deposited()
+            .times(1)
+            .returning(move |_, _, _| {
+                Box::pin(async move { 
+                    Err(anyhow::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "mock error"))) 
+                })
+            });
+
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+
+        check_token_deposits(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure alert and action are triggered due to error
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Failed to check ERC20 deposits USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
+            assert!(alert.is_description_equal("Failed to check ERC20 deposits: mock error"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for gateway contract error was not sent");
+        }
+
+        // Assert that an action was sent due to the error in fetching commits
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for gateway contract error was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_gateway_no_deposit_alerts_configured() {
+        let mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            gateway_deposit_alerts: vec![], // No deposit alerts configured
+            ..Default::default()
+        };
+
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+
+        check_token_deposits(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
         ).await;
 
         // Assertions to ensure no alerts or actions are triggered
