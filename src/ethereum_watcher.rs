@@ -280,7 +280,7 @@ async fn check_base_asset_deposits(
         if amount >= amount_threshold {
             send_alert(
                 &alert_sender,
-                    String::from("Ethereum Chain: Base asset is above deposit threshold."),
+                    String::from("Ethereum Chain: Base asset is above deposit threshold"),
                 format!(
                     "Base asset deposit threshold of {} over {} seconds has been reached. Amount deposited: {}",
                     amount_threshold, time_frame, amount
@@ -586,7 +586,7 @@ mod tests {
     use super::*;
     
     use crate::{
-        ethereum_watcher::{ethereum_chain::MockEthereumChainTrait, state_contract::MockStateContractTrait},
+        ethereum_watcher::{ethereum_chain::MockEthereumChainTrait, state_contract::MockStateContractTrait, portal_contract::MockPortalContractTrait},
         ethereum_actions::EthereumAction,
         config::*, fuel_watcher::fuel_chain::MockFuelChainTrait,
     };
@@ -1128,7 +1128,6 @@ mod tests {
 
         // Check if the alert was sent
         if let Some(alert) = alert_receiver.try_recv().ok() {
-            println!("{:?}", alert);
             assert!(alert.is_name_equal("Invalid commit was made on the state contract"));
             assert!(alert.is_description_equal("An invalid commit was made on the state contract. Hash: c84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
@@ -1271,4 +1270,301 @@ mod tests {
         assert_eq!(last_commit_check_block, 0, "Last commit check block should not change on error");
     }
 
+    #[tokio::test]
+    async fn test_check_invalid_commits_alert_level_none() {
+        let mock_ethereum_chain = MockEthereumChainTrait::new();
+        let mock_state_contract = MockStateContractTrait::new();
+        let mock_fuel_chain = MockFuelChainTrait::new();
+
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            invalid_state_commit_alert: GenericAlert {
+                alert_level: AlertLevel::None,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
+        let state_contract = Arc::new(mock_state_contract) as Arc<dyn StateContractTrait>;
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        let mut last_commit_check_block = 0;
+
+        check_invalid_commits(&ethereum_chain, &state_contract, action_sender, alert_sender,
+                                &watch_config, &fuel_chain, &mut last_commit_check_block).await;
+
+        // No change in last commit check block as there was no alert
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent when there is alert level none");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent when there is alert level none");
+        assert_eq!(last_commit_check_block, 0, "Last commit check block should not change on error");
+    }
+
+    #[tokio::test]
+    async fn test_successful_deposit_check_no_alert() {
+        let mut mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+        let watch_config = EthereumClientWatcher {
+            portal_deposit_alerts: vec![
+                DepositAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000"),
+                },
+            ],
+            ..Default::default()
+        };
+    
+        // Mock portal contract response
+        mock_portal_contract
+            .expect_get_base_amount_deposited()
+            .times(1)
+            .returning(move |_, _| {
+                Box::pin(async move { Ok(U256::from(50)) })
+            });
+    
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block = 100;
+    
+        check_base_asset_deposits(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+    
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+
+    #[tokio::test]
+    async fn test_deposit_amount_triggers_alert() {
+        let mut mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let threshold = get_value(
+            150.0,
+            18,
+        );
+        let watch_config = EthereumClientWatcher {
+            portal_deposit_alerts: vec![
+                DepositAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Mock portal contract response to exceed threshold
+        mock_portal_contract
+            .expect_get_base_amount_deposited()
+            .times(1)
+            .returning(move |_, _| {
+                Box::pin(async move { Ok(threshold) })
+            });
+
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block: u64 = 100;
+
+        check_base_asset_deposits(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure alert and action are triggered
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Ethereum Chain: Base asset is above deposit threshold"));
+            assert!(alert.is_description_equal("Base asset deposit threshold of 100000000000000000000 over 60 seconds has been reached. Amount deposited: 150000000000000000000"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for portal contract error was not sent");
+        }
+
+        // Assert that an action was sent due to the error in fetching commits
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for portal contract error was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_failed_deposit_check() {
+        let mut mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            portal_deposit_alerts: vec![
+                DepositAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Mock portal contract response to simulate an error
+        mock_portal_contract
+            .expect_get_base_amount_deposited()
+            .times(1)
+            .returning(move |_, _| {
+                Box::pin(async move { 
+                    Err(anyhow::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "mock error"))) 
+                })
+            });
+
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block: u64 = 100;
+
+        check_base_asset_deposits(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure alert and action are triggered due to error
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Failed to check portal contract for base asset deposits"));
+            assert!(alert.is_description_equal("Failed to check base asset deposits: mock error"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for failed deposit check was not sent");
+        }
+    
+        // Assert that an action was sent due to the error
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for failed deposit check was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_no_deposit_alerts_configured() {
+        let mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            portal_deposit_alerts: vec![],
+            ..Default::default()
+        };
+
+        // No need to mock portal_contract response as it should not be called
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block: u64 = 100;
+
+        check_base_asset_deposits(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+
+    #[tokio::test]
+    async fn test_deposit_amount_alert_level_none() {
+        let mock_portal_contract = MockPortalContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            portal_deposit_alerts: vec![
+                DepositAlert {
+                    alert_level: AlertLevel::None,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let portal_contract = Arc::new(mock_portal_contract) as Arc<dyn PortalContractTrait>;
+        let last_commit_check_block: u64 = 100;
+
+        check_base_asset_deposits(
+            &portal_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            &last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
 }
