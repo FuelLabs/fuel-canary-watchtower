@@ -1970,7 +1970,7 @@ mod tests {
         ) = unbounded_channel();
 
         let watch_config = EthereumClientWatcher {
-            gateway_deposit_alerts: vec![], // No deposit alerts configured
+            gateway_deposit_alerts: vec![],
             ..Default::default()
         };
 
@@ -1988,6 +1988,266 @@ mod tests {
         // Assertions to ensure no alerts or actions are triggered
         assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
         assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+
+    #[tokio::test]
+    async fn test_gateway_withdrawal_amount_triggers_alert() {
+        let mut mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let amount_threshold = get_value(150.0, 18); // Example threshold value
+        let watch_config = EthereumClientWatcher {
+            gateway_withdrawal_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        mock_gateway_contract
+            .expect_get_token_amount_withdrawn()
+            .times(1)
+            .returning(move |_, _, _| {
+                Box::pin(async move { Ok(amount_threshold) }) // Amount exceeds threshold
+            });
+
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+
+        check_token_withdrawals(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure alert and action are triggered
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            assert!(alert.is_name_equal("Ethereum Chain: ERC20 USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above withdrawal threshold"));
+            assert!(alert.is_description_equal("ERC20 withdrawal threshold of 100000000000000000000USDC over 60 seconds has been reached. Amount withdrawn: 150000000000000000000USDC"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for gateway contract error was not sent");
+        }
+
+        // Assert that an action was sent due to the error in fetching commits
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for gateway contract error was not sent");
+        }    
+    }
+
+    #[tokio::test]
+    async fn test_gateway_successful_withdrawal_check_no_alert() {
+        let mut mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+    
+        let watch_config = EthereumClientWatcher {
+            gateway_withdrawal_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+                },
+            ],
+            ..Default::default()
+        };
+    
+        // Mock the gateway contract response to return an amount below the threshold
+        let amount_below_threshold = get_value(50.0, 18);
+        mock_gateway_contract
+            .expect_get_token_amount_withdrawn()
+            .times(1)
+            .returning(move |_, _, _| {
+                Box::pin(async move { Ok(U256::from(amount_below_threshold)) })
+            });
+    
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+    
+        check_token_withdrawals(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
+        ).await;
+    
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+    
+    #[tokio::test]
+    async fn test_gateway_failed_withdrawal_check() {
+        let mut mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+    
+        let watch_config = EthereumClientWatcher {
+            gateway_withdrawal_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+                },
+            ],
+            ..Default::default()
+        };
+    
+        // Mock the gateway contract response to simulate an error
+        mock_gateway_contract
+            .expect_get_token_amount_withdrawn()
+            .times(1)
+            .returning(move |_, _, _| {
+                Box::pin(async move { 
+                    Err(anyhow::Error::new(std::io::Error::new(std::io::ErrorKind::Other, "mock error"))) 
+                })
+            });
+    
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+    
+        check_token_withdrawals(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
+        ).await;
+    
+        // Assertions to ensure alert and action are triggered due to error
+        if let Some(alert) = alert_receiver.try_recv().ok() {
+            println!("{:?}", alert);
+            assert!(alert.is_name_equal("Ethereum Chain: Failed to check ERC20 withdrawals USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
+            assert!(alert.is_description_equal("Failed to check ERC20 withdrawals: mock error"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert for failed withdrawal check was not sent");
+        }
+    
+        if let Some(action) = action_receiver.try_recv().ok() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action for failed withdrawal check was not sent");
+        }
+    }
+    
+    #[tokio::test]
+    async fn test_gateway_no_withdrawal_alerts_configured() {
+        let mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+    
+        let watch_config = EthereumClientWatcher {
+            gateway_withdrawal_alerts: vec![],
+            ..Default::default()
+        };
+    
+        // No need to mock gateway_contract response as it should not be called
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+    
+        check_token_withdrawals(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
+        ).await;
+    
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent");
+    }
+    
+    #[tokio::test]
+    async fn test_withdrawal_alert_level_none() {
+        let mock_gateway_contract = MockGatewayContractTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = EthereumClientWatcher {
+            gateway_withdrawal_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::None,
+                    time_frame: 60,
+                    amount: 100.0,
+                    token_decimals: 18,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+                },
+            ],
+            ..Default::default()
+        };
+
+        // No need to mock gateway_contract response as alerts with AlertLevel::None should not trigger checks
+        let gateway_contract = Arc::new(mock_gateway_contract) as Arc<dyn GatewayContractTrait>;
+        let last_commit_check_block = 100;
+
+        check_token_withdrawals(
+            &gateway_contract,
+            action_sender,
+            alert_sender,
+            &watch_config,
+            last_commit_check_block,
+        ).await;
+
+        // Assertions to ensure no alerts or actions are triggered
+        assert!(alert_receiver.try_recv().is_err(), "Alert was unexpectedly sent despite AlertLevel::None");
+        assert!(action_receiver.try_recv().is_err(), "Action was unexpectedly sent despite AlertLevel::None");
     }
 
 }
