@@ -21,7 +21,6 @@ pub struct WatchtowerConfig {
     pub duplicate_alert_delay: u32,
     pub min_duration_from_start_to_err: Duration,
     pub alert_cache_expiry: Duration,
-    pub alert_cache_size: usize,
     pub fuel_client_watcher: FuelClientWatcher,
     pub ethereum_client_watcher: EthereumClientWatcher,
 }

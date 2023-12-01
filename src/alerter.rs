@@ -59,7 +59,7 @@ pub struct WatchtowerAlerter{
 
 impl WatchtowerAlerter{
     pub fn new(config: &WatchtowerConfig, pagerduty_client: Option<PagerDutyClient>) -> Result<Self> {
-        let alert_cache = Arc::new(Mutex::new(HashMap::with_capacity(config.alert_cache_size)));
+        let alert_cache = Arc::new(Mutex::new(HashMap::new()));
         let alert_cache_expiry = config.alert_cache_expiry;
         let watchtower_system_name = config.watchtower_system_name.to_string();
         let allowed_alerting_start_time = SystemTime::now() + config.min_duration_from_start_to_err;

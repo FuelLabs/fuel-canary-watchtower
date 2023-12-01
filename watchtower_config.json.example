@@ -15,7 +15,6 @@
     "secs": 300000,
     "nanos": 0
   },
-  "alert_cache_size": 100,
   "fuel_client_watcher": {
     "connection_alert": {
       "alert_level": "Warn"
