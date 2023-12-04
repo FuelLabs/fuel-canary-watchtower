@@ -34,13 +34,13 @@ Copy the config file and remove the `.example` part, now edit the `watchtower_co
 If you require alerting you must set your [PagerDuty](https://www.pagerduty.com/) key as such in your terminal:
 
 ```sh
-export PAGERDUTY_KEY_ENV_VAR=KEY-HERE
+export WATCHTOWER_PAGERDUTY_KEY=KEY-HERE
 ```
 
 If you require automated pausing of contracts you must set your ethereum private key as such:
 
 ```sh
-export PRIVATE_KEY_ENV_VAR=KEY-HERE
+export WATCHTOWER_ETH_PRIVATE_KEY=KEY-HERE
 ```
 
 Build the project and run it:
