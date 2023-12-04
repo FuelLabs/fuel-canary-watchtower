@@ -63,12 +63,12 @@ async fn check_fuel_block_production(
                 &alert_sender,
                 String::from("Fuel Chain: Failed to check get latest block"),
                 format!("Error: {}", e),
-                watch_config.block_production_alert.alert_level.clone(),
+                watch_config.query_alert.alert_level.clone(),
             );
             send_action(
                 &action_sender,
-                watch_config.block_production_alert.alert_action.clone(),
-                Some(watch_config.block_production_alert.alert_level.clone()),
+                watch_config.query_alert.alert_action.clone(),
+                Some(watch_config.query_alert.alert_level.clone()),
             );
             return;
         }
@@ -120,12 +120,12 @@ async fn check_fuel_base_asset_withdrawals(
                         portal_withdrawal_alert.token_name
                     ),
                     format!("Error: {}", e),
-                    portal_withdrawal_alert.alert_level.clone(),
+                    watch_config.query_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    portal_withdrawal_alert.alert_action.clone(),
-                    Some(portal_withdrawal_alert.alert_level.clone()),
+                    watch_config.query_alert.alert_action.clone(),
+                    Some(watch_config.query_alert.alert_level.clone()),
                 );
                 continue;
             }
@@ -189,12 +189,12 @@ async fn check_fuel_token_withdrawals(
                         gateway_withdrawal_alert.token_name, gateway_withdrawal_alert.token_address,
                     ),
                     format!("Error: {}", e),
-                    gateway_withdrawal_alert.alert_level.clone(),
+                    watch_config.query_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    gateway_withdrawal_alert.alert_action.clone(),
-                    Some(gateway_withdrawal_alert.alert_level.clone()),
+                    watch_config.query_alert.alert_action.clone(),
+                    Some(watch_config.query_alert.alert_level.clone()),
                 );
                 continue;
             }
@@ -420,6 +420,10 @@ mod tests {
                 max_block_time: 60,
                 alert_action: EthereumAction::None,
             },
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -436,7 +440,7 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Fuel Chain: Failed to check get latest block"));
             assert!(alert.is_description_equal("Error: Error fetching block time"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert was not sent");
         }
@@ -444,7 +448,7 @@ mod tests {
         // Check if the action was sent
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action was not sent");
         }
@@ -544,6 +548,10 @@ mod tests {
                 token_name: String::from("ETH"),
                 token_address: String::from("0x0000000000000000000000000000000000000000000000000000000000000000"),
             }],
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -561,7 +569,7 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Fuel Chain: Failed to check fuel chain for base asset ETH withdrawals"));
             assert!(alert.is_description_equal("Error: Error fetching withdrawal amount"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert was not sent");
         }
@@ -569,7 +577,7 @@ mod tests {
         // Check if the action was sent
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action was not sent");
         }
@@ -672,6 +680,10 @@ mod tests {
                 token_name: String::from("USDC"),
                 token_address: String::from("0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"),
             }],
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -692,7 +704,7 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Fuel Chain: Failed to check fuel chain for ERC20 USDC withdrawals at address 0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"));
             assert!(alert.is_description_equal("Error: Error fetching withdrawal amount"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert was not sent");
         }
@@ -700,7 +712,7 @@ mod tests {
         // Check if the action was sent
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action was not sent");
         }

@@ -73,12 +73,12 @@ async fn check_eth_block_production(
                 &alert_sender,
                 String::from("Ethereum Chain: Failed to check get latest block"),
                 format!("Error: {}", e),
-                watch_config.block_production_alert.alert_level.clone(),
+                watch_config.query_alert.alert_level.clone(),
             );
             send_action(
                 &action_sender,
-                watch_config.block_production_alert.alert_action.clone(),
-                Some(watch_config.block_production_alert.alert_level.clone()),
+                watch_config.query_alert.alert_action.clone(),
+                Some(watch_config.query_alert.alert_level.clone()),
             );
             return;
         }
@@ -127,12 +127,12 @@ async fn check_eth_account_balance(
                 &alert_sender,
                 String::from("Ethereum Chain: Failed to check ethereum account funds"),
                 format!("Error: {}", e),
-                watch_config.account_funds_alert.alert_level.clone(),
+                watch_config.query_alert.alert_level.clone(),
             );
             send_action(
                 &action_sender,
-                watch_config.account_funds_alert.alert_action.clone(),
-                Some(watch_config.account_funds_alert.alert_level.clone()),
+                watch_config.query_alert.alert_action.clone(),
+                Some(watch_config.query_alert.alert_level.clone()),
             );
             return;
         }
@@ -173,12 +173,12 @@ async fn check_eth_invalid_commits(
                 &alert_sender,
                 String::from("Ethereum Chain: Failed to check state contract"),
                 format!("Error: {}", e),
-                watch_config.invalid_state_commit_alert.alert_level.clone(),
+                watch_config.query_alert.alert_level.clone(),
             );
             send_action(
                 &action_sender,
-                watch_config.invalid_state_commit_alert.alert_action.clone(),
-                Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
+                watch_config.query_alert.alert_action.clone(),
+                Some(watch_config.query_alert.alert_level.clone()),
             );
             return;
         }
@@ -206,12 +206,12 @@ async fn check_eth_invalid_commits(
                     &alert_sender,
                     String::from("Fuel Chain: Failed to check fuel chain for state commit"),
                     format!("Error: {}", e),
-                    watch_config.invalid_state_commit_alert.alert_level.clone(),
+                    watch_config.query_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    watch_config.invalid_state_commit_alert.alert_action.clone(),
-                    Some(watch_config.invalid_state_commit_alert.alert_level.clone()),
+                    watch_config.query_alert.alert_action.clone(),
+                    Some(watch_config.query_alert.alert_level.clone()),
                 );
             }
         }
@@ -255,12 +255,12 @@ async fn check_eth_base_asset_deposits(
                         portal_deposit_alert.token_name
                     ),
                     format!("Error: {}", e),
-                    portal_deposit_alert.alert_level.clone(),
+                    watch_config.query_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    portal_deposit_alert.alert_action.clone(),
-                    Some(portal_deposit_alert.alert_level.clone()),
+                    watch_config.query_alert.alert_action.clone(),
+                    Some(watch_config.query_alert.alert_level.clone()),
                 );
                 continue;
             }
@@ -322,12 +322,12 @@ async fn check_eth_base_asset_withdrawals(
                         portal_withdrawal_alert.token_name
                     ),
                     format!("Error: {}", e),
-                    portal_withdrawal_alert.alert_level.clone(),
+                    watch_config.query_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    portal_withdrawal_alert.alert_action.clone(),
-                    Some(portal_withdrawal_alert.alert_level.clone()),
+                    watch_config.query_alert.alert_action.clone(),
+                    Some(watch_config.query_alert.alert_level.clone()),
                 );
                 continue;
             }
@@ -394,12 +394,12 @@ async fn check_eth_token_deposits(
                         gateway_deposit_alert.token_name, gateway_deposit_alert.token_address,
                     ),
                     format!("Error: {}", e),
-                    gateway_deposit_alert.alert_level.clone(),
+                    watch_config.query_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    gateway_deposit_alert.alert_action.clone(),
-                    Some(gateway_deposit_alert.alert_level.clone()),
+                    watch_config.query_alert.alert_action.clone(),
+                    Some(watch_config.query_alert.alert_level.clone()),
                 );
                 continue;
             }
@@ -470,12 +470,12 @@ async fn check_eth_token_withdrawals(
                         gateway_withdrawal_alert.token_name, gateway_withdrawal_alert.token_address,
                     ),
                     format!("Error: {}", e),
-                    gateway_withdrawal_alert.alert_level.clone(),
+                    watch_config.query_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    gateway_withdrawal_alert.alert_action.clone(),
-                    Some(gateway_withdrawal_alert.alert_level.clone()),
+                    watch_config.query_alert.alert_action.clone(),
+                    Some(watch_config.query_alert.alert_level.clone()),
                 );
                 continue;
             }
@@ -844,6 +844,10 @@ mod tests {
                 alert_action: EthereumAction::None,
                 max_block_time: 20,
             },
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -854,7 +858,7 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: Failed to check get latest block"));
             assert!(alert.is_description_equal("Error: Failed to get block time"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert was not sent");
         }
@@ -862,7 +866,7 @@ mod tests {
         // Check if the action was sent
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action was not sent");
         }
@@ -1295,6 +1299,10 @@ mod tests {
                 alert_level: AlertLevel::Warn,
                 alert_action: EthereumAction::None,
             },
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -1318,7 +1326,7 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: Failed to check state contract"));
             assert!(alert.is_description_equal("Error: Error fetching commits"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert for state contract error was not sent");
         }
@@ -1326,7 +1334,7 @@ mod tests {
         // Assert that an action was sent due to the error in fetching commits
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action for state contract error was not sent");
         }
@@ -1499,6 +1507,10 @@ mod tests {
                 token_name: String::from("ETH"),
                 token_address: String::from("0x0000000000000000000000000000000000000000"),
             }],
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -1531,7 +1543,7 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: Failed to check portal contract for ETH deposits"));
             assert!(alert.is_description_equal("Error: mock error"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert for failed deposit check was not sent");
         }
@@ -1539,7 +1551,7 @@ mod tests {
         // Assert that an action was sent due to the error
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action for failed deposit check was not sent");
         }
@@ -1682,6 +1694,10 @@ mod tests {
                 token_name: String::from("ETH"),
                 token_address: String::from("0x0000000000000000000000000000000000000000"),
             }],
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -1714,7 +1730,7 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: Failed to check portal contract for ETH withdrawals"));
             assert!(alert.is_description_equal("Error: mock error"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert for failed withdrawals check was not sent");
         }
@@ -1722,7 +1738,7 @@ mod tests {
         // Assert that an action was sent due to the error
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action for failed withdrawals check was not sent");
         }
@@ -1906,6 +1922,10 @@ mod tests {
                 token_name: String::from("USDC"),
                 token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
             }],
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -1938,7 +1958,7 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: Failed to check gateway contract for USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
             assert!(alert.is_description_equal("Error: mock error"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert for gateway contract error was not sent");
         }
@@ -1946,7 +1966,7 @@ mod tests {
         // Assert that an action was sent due to the error in fetching commits
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action for gateway contract error was not sent");
         }
@@ -2096,6 +2116,10 @@ mod tests {
                 token_name: String::from("USDC"),
                 token_address: String::from("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
             }],
+            query_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
             ..Default::default()
         };
 
@@ -2128,14 +2152,14 @@ mod tests {
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: Failed to check gateway contract for USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
             assert!(alert.is_description_equal("Error: mock error"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert!(alert.is_level_equal(AlertLevel::Error));
         } else {
             panic!("Alert for failed withdrawal check was not sent");
         }
 
         if let Ok(action) = action_receiver.try_recv() {
             assert!(action.is_action_equal(EthereumAction::None));
-            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+            assert!(action.is_alert_level_equal(AlertLevel::Error));
         } else {
             panic!("Action for failed withdrawal check was not sent");
         }

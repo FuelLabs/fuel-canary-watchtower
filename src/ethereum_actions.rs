@@ -119,7 +119,6 @@ impl WatchtowerEthereumActions {
                 String::from(THREAD_CONNECTIONS_ERR),
                 AlertLevel::Error,
             );
-            panic!("{}", THREAD_CONNECTIONS_ERR);
         });
     }
 

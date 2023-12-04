@@ -35,6 +35,7 @@ pub struct WatchtowerConfig {
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct FuelClientWatcher {
     pub connection_alert: GenericAlert,
+    pub query_alert: GenericAlert,
     pub block_production_alert: BlockProductionAlert,
     pub portal_withdrawal_alerts: Vec<WithdrawAlert>,
     pub gateway_withdrawal_alerts: Vec<WithdrawAlert>,
@@ -43,6 +44,7 @@ pub struct FuelClientWatcher {
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct EthereumClientWatcher {
     pub connection_alert: GenericAlert,
+    pub query_alert: GenericAlert,
     pub block_production_alert: BlockProductionAlert,
     pub account_funds_alert: AccountFundsAlert,
     pub invalid_state_commit_alert: GenericAlert,
