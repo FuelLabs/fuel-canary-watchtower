@@ -539,7 +539,7 @@ pub async fn start_ethereum_watcher(
         loop {
             send_alert(
                 &alert_sender.clone(),
-                String::from("Watching ethereum chain."),
+                String::from("Watching ethereum chain"),
                 String::from("Periodically querying the ethereum chain."),
                 AlertLevel::Info,
             );
