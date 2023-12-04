@@ -268,17 +268,9 @@ mod tests {
     use super::*;
     
     use crate::{
-        ethereum_watcher::{
-            ethereum_chain::MockEthereumChainTrait,
-            state_contract::MockStateContractTrait,
-            portal_contract::MockPortalContractTrait,
-            gateway_contract::MockGatewayContractTrait,
-        },
         ethereum_actions::EthereumAction,
         config::*, fuel_watcher::fuel_chain::MockFuelChainTrait,
     };
-    use ethers::types::U256;
-    use fuels::tx::Bytes32;
     use tokio::sync::mpsc::unbounded_channel;
 
     #[tokio::test]
