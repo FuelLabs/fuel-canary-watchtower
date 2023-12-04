@@ -144,8 +144,8 @@ impl WatchtowerEthereumActions {
             Ok(Ok(_)) => {
                 send_alert(
                     &alert_sender,
-                    format!("Successfully paused {} contract.", contract_name),
-                    format!("Successfully paused {} contract.", contract_name),
+                    format!("Successfully paused {} contract", contract_name),
+                    format!("Successfully paused {} contract", contract_name),
                     AlertLevel::Info,
                 );
             }
@@ -153,7 +153,7 @@ impl WatchtowerEthereumActions {
                 // This is the case where pause_future completed, but resulted in an error.
                 send_alert(
                     &alert_sender,
-                    format!("Failed to pause {} contract.", contract_name),
+                    format!("Failed to pause {} contract", contract_name),
                     e.to_string(),
                     alert_level,
                 );
@@ -162,8 +162,8 @@ impl WatchtowerEthereumActions {
                 // This is the timeout case
                 send_alert(
                     &alert_sender,
-                    format!("Timeout while pausing {} contract.", contract_name),
-                    format!("Timeout while pausing {} contract.", contract_name),
+                    format!("Timeout while pausing {} contract", contract_name),
+                    format!("Timeout while pausing {} contract", contract_name),
                     alert_level,
                 );
             }
@@ -290,15 +290,15 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-            "Pausing state contract.",
-            "Pausing state contract.",
+            "Pausing state contract",
+            "Pausing state contract",
             AlertLevel::Info,
         )
         .await;
         assert_alert_received(
             &mut alert_receiver,
-            "Successfully paused state contract.",
-            "Successfully paused state contract.",
+            "Successfully paused state contract",
+            "Successfully paused state contract",
             AlertLevel::Info,
         )
         .await;
@@ -442,15 +442,15 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-            "Pausing gateway contract.",
-            "Pausing gateway contract.",
+            "Pausing gateway contract",
+            "Pausing gateway contract",
             AlertLevel::Info,
         )
         .await;
         assert_alert_received(
             &mut alert_receiver,
-            "Successfully paused gateway contract.",
-            "Successfully paused gateway contract.",
+            "Successfully paused gateway contract",
+            "Successfully paused gateway contract",
             AlertLevel::Info,
         )
         .await;
@@ -488,8 +488,8 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-            "Pausing portal contract.",
-            "Pausing portal contract.",
+            "Pausing portal contract",
+            "Pausing portal contract",
             AlertLevel::Info,
         )
         .await;
@@ -542,38 +542,38 @@ mod tests {
         // Verify alerts for pausing each contract
         assert_alert_received(
             &mut alert_receiver,
-            "Pausing state contract.",
-            "Pausing state contract.",
+            "Pausing state contract",
+            "Pausing state contract",
             AlertLevel::Info,
         )
         .await;
         assert_alert_received(
             &mut alert_receiver,
-            "Successfully paused state contract.",
-            "Successfully paused state contract.",
-            AlertLevel::Info,
-        )
-        .await;
-
-        assert_alert_received(
-            &mut alert_receiver,
-            "Pausing gateway contract.",
-            "Pausing gateway contract.",
-            AlertLevel::Info,
-        )
-        .await;
-        assert_alert_received(
-            &mut alert_receiver,
-            "Successfully paused gateway contract.",
-            "Successfully paused gateway contract.",
+            "Successfully paused state contract",
+            "Successfully paused state contract",
             AlertLevel::Info,
         )
         .await;
 
         assert_alert_received(
             &mut alert_receiver,
-            "Pausing portal contract.",
-            "Pausing portal contract.",
+            "Pausing gateway contract",
+            "Pausing gateway contract",
+            AlertLevel::Info,
+        )
+        .await;
+        assert_alert_received(
+            &mut alert_receiver,
+            "Successfully paused gateway contract",
+            "Successfully paused gateway contract",
+            AlertLevel::Info,
+        )
+        .await;
+
+        assert_alert_received(
+            &mut alert_receiver,
+            "Pausing portal contract",
+            "Pausing portal contract",
             AlertLevel::Info,
         )
         .await;
