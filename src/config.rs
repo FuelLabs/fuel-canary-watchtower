@@ -24,6 +24,12 @@ pub struct WatchtowerConfig {
     pub alert_cache_expiry: Duration,
     pub fuel_client_watcher: FuelClientWatcher,
     pub ethereum_client_watcher: EthereumClientWatcher,
+    #[serde(default = "default_coefficient")]
+    pub coefficient: f64,
+    #[serde(default = "default_every_secs")]
+    pub every_secs: u64,
+    #[serde(default = "default_max_price")]
+    pub max_price: Option<i32>,
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -140,6 +146,15 @@ pub fn default_time_frame() -> u32 {
 }
 pub fn default_amount() -> f64 {
     1000.0
+}
+pub fn default_coefficient() -> f64 {
+    1.125
+}
+pub fn default_every_secs() -> u64 {
+    60
+}
+pub fn default_max_price() -> Option<i32> {
+    None
 }
 
 // loads a config from a json file

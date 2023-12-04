@@ -36,7 +36,13 @@ use crate::fuel_watcher::fuel_utils::setup_fuel_provider;
 pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     // Setup the providers and wallets.
     let fuel_provider = setup_fuel_provider(&config.fuel_graphql).await?;
-    let ether_provider = setup_ethereum_provider(&config.ethereum_rpc).await?;
+    let ether_provider = setup_ethereum_provider(
+        &config.ethereum_rpc,
+        config.coefficient,
+        config.every_secs,
+        config.max_price,
+    )
+    .await?;
     let chain_id: u64 = ether_provider.get_chainid().await?.as_u64();
     let (wallet, read_only) = setup_ethereum_wallet(config.ethereum_wallet_key.clone(), chain_id)?;
 

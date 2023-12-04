@@ -9,15 +9,16 @@ use std::convert::TryFrom;
 use std::ops::Mul;
 use std::sync::Arc;
 
-pub async fn setup_ethereum_provider(ethereum_rpc: &str) -> Result<Arc<GasEscalatorMiddleware<Provider<Http>>>> {
-    // Geometrically increase gas price:
-    // Start with `initial_price`, then increase it every 'every_secs' seconds by a fixed
-    // coefficient. Coefficient defaults to 1.125 (12.5%), the minimum increase for Parity to
-    // replace a transaction. Coefficient can be adjusted, and there is an optional upper limit.
-    let coefficient: f64 = 1.125;
-    let every_secs: u64 = 60;
-    let max_price: Option<i32> = None;
-
+// Geometrically increase gas price:
+// Start with `initial_price`, then increase it every 'every_secs' seconds by a fixed
+// coefficient. Coefficient defaults to 1.125 (12.5%), the minimum increase for Parity to
+// replace a transaction. Coefficient can be adjusted, and there is an optional upper limit.
+pub async fn setup_ethereum_provider(
+    ethereum_rpc: &str,
+    coefficient: f64,
+    every_secs: u64,
+    max_price: Option<i32>,
+) -> Result<Arc<GasEscalatorMiddleware<Provider<Http>>>> {
     let geometric_escalator = GeometricGasPrice::new(coefficient, every_secs, max_price);
 
     let provider = Provider::<Http>::try_from(ethereum_rpc)?;
@@ -51,6 +52,7 @@ pub fn get_public_address(key_str: &str) -> Result<String> {
     Ok(address_str)
 }
 
+// Converts a floating point value to its integer representation based on a specific number of decimals.
 pub fn get_value(value_fp: f64, decimals: u8) -> U256 {
     let decimals_p1 = if decimals < 9 { decimals } else { decimals - 9 };
     let decimals_p2 = decimals - decimals_p1;
@@ -61,6 +63,7 @@ pub fn get_value(value_fp: f64, decimals: u8) -> U256 {
     value.mul(10_u64.pow(decimals_p2 as u32))
 }
 
+// Processes a vector of logs and extracts 32-byte data from each log.
 pub fn process_logs(logs: Vec<Log>) -> Result<Vec<Bytes32>> {
     let mut extracted_data = Vec::new();
     for log in logs {

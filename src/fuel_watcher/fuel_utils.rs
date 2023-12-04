@@ -11,6 +11,7 @@ pub async fn setup_fuel_provider(fuels_graphql: &str) -> Result<Arc<FuelClient>>
     }
 }
 
+// Converts a floating point value to its integer representation based on a specific number of decimals.
 pub fn get_value(value_fp: f64, decimals: u8) -> u64 {
     let decimals_p1 = if decimals < 9 { decimals } else { decimals - 9 };
     let decimals_p2 = decimals - decimals_p1;

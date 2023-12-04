@@ -240,7 +240,7 @@ pub async fn start_fuel_watcher(
             // update the log every so often to notify that everything is working
             send_alert(
                 &alert_sender.clone(),
-                String::from("Watching fuel chain."),
+                String::from("Watching fuel chain"),
                 String::from("Periodically querying the fuel chain."),
                 AlertLevel::Info,
             );
