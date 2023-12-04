@@ -97,23 +97,27 @@ impl<P: Middleware + 'static> StateContractTrait for StateContract<P> {
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
 
-        match &self.contract {
-            Some(contract) => {
-                if !contract.paused().call().await? {
-                    let pause_call = contract.pause(); // Create a binding
-                    let result = pause_call.send().await;
-                    match result {
-                        Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
-                        Ok(res) => {
-                            println!("Pausing state contract at tx {:?}", res);
-                            Ok(())
-                        }
-                    }
-                } else {
-                    Err(anyhow::anyhow!("State Contract is already paused or invalid"))
-                }
+        let contract = self
+            .contract
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("State Contract not initialized"))?;
+
+        // Check if the contract is already paused
+        let is_paused = contract.paused().call().await?;
+        if is_paused {
+            // If the contract is already paused, do nothing
+            return Ok(());
+        }
+
+        // Proceed with pausing the contract
+        let pause_call = contract.pause();
+        let result = pause_call.send().await;
+        match result {
+            Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
+            Ok(res) => {
+                println!("Pausing state contract at tx {:?}", res);
+                Ok(())
             }
-            None => Err(anyhow::anyhow!("State Contract not initialized")),
         }
     }
 }

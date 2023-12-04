@@ -154,14 +154,14 @@ impl WatchtowerAlerter {
                     }
                 }
             }
-        }
 
-        // Log the alert based on its level
-        match params.alert_level {
-            AlertLevel::Info => log::info!("{}: {}", params.name, params.description),
-            AlertLevel::Warn => log::warn!("{}: {}", params.name, params.description),
-            AlertLevel::Error => log::error!("{}: {}", params.name, params.description),
-            AlertLevel::None => {}
+            // Log the alert based on its level
+            match params.alert_level {
+                AlertLevel::Info => log::info!("{}: {}", params.name, params.description),
+                AlertLevel::Warn => log::warn!("{}: {}", params.name, params.description),
+                AlertLevel::Error => log::error!("{}: {}", params.name, params.description),
+                AlertLevel::None => {}
+            }
         }
     }
 

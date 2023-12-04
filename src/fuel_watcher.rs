@@ -105,11 +105,11 @@ async fn check_fuel_base_asset_withdrawals(
         let time_frame = portal_withdrawal_alert.time_frame;
         let amount = match fuel_chain.get_base_amount_withdrawn(time_frame).await {
             Ok(amt) => {
-                let formatted_amt = convert_to_decimal_u64(amt, portal_withdrawal_alert.token_decimals);
-                println!(
-                    "Fuel Chain: {}{} withdrawn over a period of {} seconds",
-                    formatted_amt, portal_withdrawal_alert.token_name, time_frame,
-                );
+                // let formatted_amt = convert_to_decimal_u64(amt, portal_withdrawal_alert.token_decimals);
+                // println!(
+                //     "Fuel Chain: {}{} withdrawn over a period of {} seconds",
+                //     formatted_amt, portal_withdrawal_alert.token_name, time_frame,
+                // );
                 amt
             }
             Err(e) => {
@@ -174,11 +174,11 @@ async fn check_fuel_token_withdrawals(
             .await
         {
             Ok(amt) => {
-                let formatted_amt = convert_to_decimal_u64(amt, gateway_withdrawal_alert.token_decimals);
-                println!(
-                    "Fuel Chain: {}{} withdrawn over a period of {} seconds",
-                    formatted_amt, gateway_withdrawal_alert.token_name, time_frame,
-                );
+                // let formatted_amt = convert_to_decimal_u64(amt, gateway_withdrawal_alert.token_decimals);
+                // println!(
+                //     "Fuel Chain: {}{} withdrawn over a period of {} seconds",
+                //     formatted_amt, gateway_withdrawal_alert.token_name, time_frame,
+                // );
                 amt
             }
             Err(e) => {

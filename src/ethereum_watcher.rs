@@ -240,11 +240,11 @@ async fn check_eth_base_asset_deposits(
             .await
         {
             Ok(amt) => {
-                let formatted_amt = convert_to_decimal_u256(amt, portal_deposit_alert.token_decimals);
-                println!(
-                    "Ethereum Chain: {}{} deposited over a period of {} seconds",
-                    formatted_amt, portal_deposit_alert.token_name, time_frame,
-                );
+                // let formatted_amt = convert_to_decimal_u256(amt, portal_deposit_alert.token_decimals);
+                // println!(
+                //     "Ethereum Chain: {}{} deposited over a period of {} seconds",
+                //     formatted_amt, portal_deposit_alert.token_name, time_frame,
+                // );
                 amt
             }
             Err(e) => {
@@ -307,11 +307,11 @@ async fn check_eth_base_asset_withdrawals(
             .await
         {
             Ok(amt) => {
-                let formatted_amt = convert_to_decimal_u256(amt, portal_withdrawal_alert.token_decimals);
-                println!(
-                    "Ethereum Chain: {}{} withdrawn over a period of {} seconds",
-                    formatted_amt, portal_withdrawal_alert.token_name, time_frame,
-                );
+                // let formatted_amt = convert_to_decimal_u256(amt, portal_withdrawal_alert.token_decimals);
+                // println!(
+                //     "Ethereum Chain: {}{} withdrawn over a period of {} seconds",
+                //     formatted_amt, portal_withdrawal_alert.token_name, time_frame,
+                // );
                 amt
             }
             Err(e) => {
@@ -379,11 +379,11 @@ async fn check_eth_token_deposits(
             .await
         {
             Ok(amt) => {
-                let formatted_amt = convert_to_decimal_u256(amt, gateway_deposit_alert.token_decimals);
-                println!(
-                    "Ethereum Chain: {}{} deposited over a period of {} seconds",
-                    formatted_amt, gateway_deposit_alert.token_name, time_frame,
-                );
+                // let formatted_amt = convert_to_decimal_u256(amt, gateway_deposit_alert.token_decimals);
+                // println!(
+                //     "Ethereum Chain: {}{} deposited over a period of {} seconds",
+                //     formatted_amt, gateway_deposit_alert.token_name, time_frame,
+                // );
                 amt
             }
             Err(e) => {
@@ -455,11 +455,11 @@ async fn check_eth_token_withdrawals(
             .await
         {
             Ok(amt) => {
-                let formatted_amt = convert_to_decimal_u256(amt, gateway_withdrawal_alert.token_decimals);
-                println!(
-                    "Ethereum Chain: {}{} withdrawn over a period of {} seconds",
-                    formatted_amt, gateway_withdrawal_alert.token_name, time_frame,
-                );
+                // let formatted_amt = convert_to_decimal_u256(amt, gateway_withdrawal_alert.token_decimals);
+                // println!(
+                //     "Ethereum Chain: {}{} withdrawn over a period of {} seconds",
+                //     formatted_amt, gateway_withdrawal_alert.token_name, time_frame,
+                // );
                 amt
             }
             Err(e) => {

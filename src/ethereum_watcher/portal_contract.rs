@@ -157,23 +157,27 @@ impl <P: Middleware + 'static> PortalContractTrait for PortalContract<P>{
             return Err(anyhow::anyhow!("Ethereum account not configured."));
         }
 
-        match &self.contract {
-            Some(contract) => {
-                if !contract.paused().call().await? {
-                    let pause_call = contract.pause(); // Create a binding
-                    let result = pause_call.send().await;
-                    match result {
-                        Err(e) => Err(anyhow::anyhow!("Failed to pause portal contract: {}", e)),
-                        Ok(res) => {
-                            println!("Pausing portal contract at tx {:?}",res);
-                            Ok(())
-                        },
-                    }
-                } else {
-                    Err(anyhow::anyhow!("Portal Contract is already paused or invalid"))
-                }
+        let contract = self
+            .contract
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Portal Contract not initialized"))?;
+
+        // Check if the contract is already paused
+        let is_paused = contract.paused().call().await?;
+        if is_paused {
+            // If the contract is already paused, do nothing
+            return Ok(());
+        }
+
+        // Proceed with pausing the contract
+        let pause_call = contract.pause();
+        let result = pause_call.send().await;
+        match result {
+            Err(e) => Err(anyhow::anyhow!("Failed to pause portal contract: {}", e)),
+            Ok(res) => {
+                println!("Pausing portal contract at tx {:?}", res);
+                Ok(())
             }
-            None => Err(anyhow::anyhow!("Portal Contract not initialized")),
         }
     }
 }
