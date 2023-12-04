@@ -77,7 +77,7 @@ async fn check_fuel_block_production(
     if seconds_since_last_block > watch_config.block_production_alert.max_block_time {
         send_alert(
             &alert_sender,
-            String::from("Fuel block is taking long."),
+            String::from("Fuel block is taking long"),
             format!(
                 "Next fuel block is taking longer than {} seconds. Last block was {} seconds ago.",
                 watch_config.block_production_alert.max_block_time, seconds_since_last_block
@@ -295,12 +295,12 @@ mod tests {
 
         let watch_config = FuelClientWatcher {
             connection_alert: GenericAlert {
-                alert_level: AlertLevel::Error,
+                alert_level: AlertLevel::Warn,
                 alert_action: EthereumAction::None,
             },
             ..Default::default()
         };
-    
+
         // Simulate a connection failure
         mock_fuel_chain
             .expect_check_connection()
@@ -309,11 +309,553 @@ mod tests {
         
         let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
         check_fuel_chain_connection(&fuel_chain, action_sender, alert_sender, &watch_config).await;
-    
-        // Assert alert was sent
-        assert!(alert_receiver.try_recv().is_ok());
-    
-        // Assert action was sent
-        assert!(action_receiver.try_recv().is_ok());
+
+        // Check if the alert was sent
+        if let Ok(alert) = alert_receiver.try_recv() {
+            assert!(alert.is_name_equal("Failed to check fuel connection"));
+            assert!(alert.is_description_equal("Failed to check fuel connection: Connection error"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Ok(action) = action_receiver.try_recv() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
     }    
+
+    #[tokio::test]
+    async fn test_check_fuel_chain_connection_success() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+    
+        let watch_config = FuelClientWatcher {
+            connection_alert: GenericAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+    
+        // Simulate a successful connection
+        mock_fuel_chain
+            .expect_check_connection()
+            .times(1)
+            .returning(|| Box::pin(async { Ok(()) }));
+        
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_chain_connection(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+
+    #[tokio::test]
+    async fn test_check_fuel_chain_connection_alert_level_none() {
+        let mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {
+            connection_alert: GenericAlert {
+                alert_level: AlertLevel::Warn,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_block_production(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_block_production_alert_level_none() {
+        let mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {
+            block_production_alert: BlockProductionAlert {
+                alert_level: AlertLevel::None,
+                max_block_time: 60,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_block_production(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_block_production_success() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {
+            block_production_alert: BlockProductionAlert {
+                alert_level: AlertLevel::Warn,
+                max_block_time: 60,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        // Simulate block production time within the maximum allowed time
+        let simulated_block_time = 30; // Less than max_block_time
+        mock_fuel_chain
+            .expect_get_seconds_since_last_block()
+            .times(1)
+            .returning(move || Box::pin(async move { Ok(simulated_block_time) }));
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_block_production(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_block_production_error() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {
+            block_production_alert: BlockProductionAlert {
+                alert_level: AlertLevel::Warn,
+                max_block_time: 60,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        // Simulate an error in retrieving block production time
+        mock_fuel_chain
+            .expect_get_seconds_since_last_block()
+            .times(1)
+            .returning(|| Box::pin(async move { Err(anyhow::anyhow!("Error fetching block time")) }));
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_block_production(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        // Check if the alert was sent
+        if let Ok(alert) = alert_receiver.try_recv() {
+            assert!(alert.is_name_equal("Failed to check fuel block production"));
+            assert!(alert.is_description_equal("Failed to check fuel block production: Error fetching block time"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Ok(action) = action_receiver.try_recv() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_block_production_delay() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {
+            block_production_alert: BlockProductionAlert {
+                alert_level: AlertLevel::Warn,
+                max_block_time: 60,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+
+        // Simulate block production time exceeding the maximum allowed time
+        let simulated_block_time = 70; // Exceeds max_block_time
+        mock_fuel_chain
+            .expect_get_seconds_since_last_block()
+            .times(1)
+            .returning(move || Box::pin(async move { Ok(simulated_block_time) }));
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_block_production(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        // Check if the alert was sent
+        if let Ok(alert) = alert_receiver.try_recv() {
+            assert!(alert.is_name_equal("Fuel block is taking long"));
+            assert!(alert.is_description_equal("Next fuel block is taking longer than 60 seconds. Last block was 70 seconds ago."));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Ok(action) = action_receiver.try_recv() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_base_asset_withdrawals_within_threshold() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {
+            portal_withdraw_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    amount: 1000.0,
+                    token_decimals: 2,
+                    time_frame: 3600,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000000000000000000000000000"),
+                }],
+            ..Default::default()
+        };
+
+        // Simulate withdrawal amount within the threshold
+        let withdrawal_amount = 500;
+        mock_fuel_chain
+            .expect_get_base_amount_withdrawn()
+            .withf(|&time_frame| time_frame == 3600)
+            .times(1)
+            .returning(move |_| Box::pin(async move { Ok(withdrawal_amount) }));
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_base_asset_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        // Assert that no alert was sent
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_base_asset_withdrawals_error() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {
+            portal_withdraw_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    amount: 1000.0,
+                    token_decimals: 2,
+                    time_frame: 3600,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000000000000000000000000000"),
+                }],
+            ..Default::default()
+        };
+
+        // Simulate an error in retrieving base asset withdrawal amount
+        mock_fuel_chain
+            .expect_get_base_amount_withdrawn()
+            .withf(|&time_frame| time_frame == 3600)
+            .times(1)
+            .returning(move |_| Box::pin(async move { Err(anyhow::anyhow!("Error fetching withdrawal amount")) }));
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_base_asset_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        // Check if the alert was sent
+        if let Ok(alert) = alert_receiver.try_recv() {
+            assert!(alert.is_name_equal("Failed to check fuel chain for base asset withdrawals"));
+            assert!(alert.is_description_equal("Failed to check base asset withdrawals: Error fetching withdrawal amount"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+
+        // Check if the action was sent
+        if let Ok(action) = action_receiver.try_recv() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_base_asset_withdrawals_alert_level_none() {
+        let mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {                
+            portal_withdraw_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::None,
+                    amount: 1000.0,
+                    token_decimals: 2,
+                    time_frame: 3600,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("ETH"),
+                    token_address: String::from("0x0000000000000000000000000000000000000000000000000000000000000000"),
+                }],
+            ..Default::default()
+        };
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_base_asset_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_base_asset_withdrawals_no_alerts() {
+        let mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {                
+            portal_withdraw_alerts: vec![],
+            ..Default::default()
+        };
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_base_asset_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_token_withdrawals_within_threshold() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+    
+        let watch_config = FuelClientWatcher {
+            gateway_withdraw_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    amount: 1000.0,
+                    token_decimals: 9,
+                    time_frame: 3600,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"),
+                }],
+            ..Default::default()
+        };
+    
+        // Simulate withdrawal amount within the threshold
+        let withdrawal_amount = get_value(500.0, 9);
+        mock_fuel_chain
+            .expect_get_token_amount_withdrawn()
+            .withf(move |time_frame, token_address| {
+                *time_frame == 3600 && token_address == "0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"
+            })
+            .times(1)
+            .returning(move |_, _| Box::pin(async move { Ok(withdrawal_amount) }));
+    
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_token_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_token_withdrawals_error() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+    
+        let watch_config = FuelClientWatcher {
+            gateway_withdraw_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::Warn,
+                    amount: 1000.0,
+                    token_decimals: 9,
+                    time_frame: 3600,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"),
+                }],
+            ..Default::default()
+        };
+    
+        // Simulate an error in retrieving token withdrawal amount
+        mock_fuel_chain
+            .expect_get_token_amount_withdrawn()
+            .withf(|time_frame, token_address| {
+                *time_frame == 3600 && token_address == "0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"
+            })
+            .times(1)
+            .returning(|_, _| Box::pin(async { Err(anyhow::anyhow!("Error fetching withdrawal amount")) }));
+    
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_token_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+    
+        // Check if the alert was sent
+        if let Ok(alert) = alert_receiver.try_recv() {
+            assert!(alert.is_name_equal("Failed to check fuel chain for ERC20 USDC withdrawals at address 0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"));
+            assert!(alert.is_description_equal("Failed to check ERC20 withdrawals: Error fetching withdrawal amount"));
+            assert!(alert.is_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Alert was not sent");
+        }
+    
+        // Check if the action was sent
+        if let Ok(action) = action_receiver.try_recv() {
+            assert!(action.is_action_equal(EthereumAction::None));
+            assert!(action.is_alert_level_equal(AlertLevel::Warn));
+        } else {
+            panic!("Action was not sent");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_token_withdrawals_alert_level_none() {
+        let mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {                
+            gateway_withdraw_alerts: vec![
+                WithdrawAlert {
+                    alert_level: AlertLevel::None,
+                    amount: 1000.0,
+                    token_decimals: 2,
+                    time_frame: 3600,
+                    alert_action: EthereumAction::None,
+                    token_name: String::from("USDC"),
+                    token_address: String::from("0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"),
+                }],
+            ..Default::default()
+        };
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_token_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
+    #[tokio::test]
+    async fn test_check_fuel_token_withdrawals_no_alerts() {
+        let mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {                
+            gateway_withdraw_alerts: vec![],
+            ..Default::default()
+        };
+
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_token_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+
+        assert!(alert_receiver.try_recv().is_err(), "No alert should be sent");
+        assert!(action_receiver.try_recv().is_err(), "No action should be sent");
+    }
+
 }
