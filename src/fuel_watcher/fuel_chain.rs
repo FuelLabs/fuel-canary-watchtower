@@ -80,10 +80,10 @@ impl FuelChainTrait for FuelChain {
         let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
 
         if current_timestamp < last_block_timestamp {
-            return Err(anyhow::anyhow!("Block time is ahead of current time"));
+            Ok(0)
+        }else {
+            Ok((current_timestamp - last_block_timestamp) as u32)
         }
-
-        Ok((current_timestamp - last_block_timestamp) as u32)
     }
 
     async fn fetch_chain_info(&self) -> Result<ChainInfo> {

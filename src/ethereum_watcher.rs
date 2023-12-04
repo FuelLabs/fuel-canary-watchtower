@@ -91,7 +91,7 @@ async fn check_eth_block_production(
                 "Ethereum Chain: block is taking longer than {} seconds",
                 watch_config.block_production_alert.max_block_time,
             ),
-            format!("Last block was {} seconds ago.", seconds_since_last_block),
+            format!("Last block was {} seconds ago", seconds_since_last_block),
             watch_config.block_production_alert.alert_level.clone(),
         );
         send_action(
@@ -239,14 +239,7 @@ async fn check_eth_base_asset_deposits(
             .get_base_amount_deposited(time_frame, *last_commit_check_block)
             .await
         {
-            Ok(amt) => {
-                // let formatted_amt = convert_to_decimal_u256(amt, portal_deposit_alert.token_decimals);
-                // println!(
-                //     "Ethereum Chain: {}{} deposited over a period of {} seconds",
-                //     formatted_amt, portal_deposit_alert.token_name, time_frame,
-                // );
-                amt
-            }
+            Ok(amt) => amt,
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -306,14 +299,7 @@ async fn check_eth_base_asset_withdrawals(
             .get_base_amount_withdrawn(time_frame, *last_commit_check_block)
             .await
         {
-            Ok(amt) => {
-                // let formatted_amt = convert_to_decimal_u256(amt, portal_withdrawal_alert.token_decimals);
-                // println!(
-                //     "Ethereum Chain: {}{} withdrawn over a period of {} seconds",
-                //     formatted_amt, portal_withdrawal_alert.token_name, time_frame,
-                // );
-                amt
-            }
+            Ok(amt) => amt,
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -378,14 +364,7 @@ async fn check_eth_token_deposits(
             .get_token_amount_deposited(time_frame, &gateway_deposit_alert.token_address, latest_block)
             .await
         {
-            Ok(amt) => {
-                // let formatted_amt = convert_to_decimal_u256(amt, gateway_deposit_alert.token_decimals);
-                // println!(
-                //     "Ethereum Chain: {}{} deposited over a period of {} seconds",
-                //     formatted_amt, gateway_deposit_alert.token_name, time_frame,
-                // );
-                amt
-            }
+            Ok(amt) => amt,
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -454,14 +433,7 @@ async fn check_eth_token_withdrawals(
             )
             .await
         {
-            Ok(amt) => {
-                // let formatted_amt = convert_to_decimal_u256(amt, gateway_withdrawal_alert.token_decimals);
-                // println!(
-                //     "Ethereum Chain: {}{} withdrawn over a period of {} seconds",
-                //     formatted_amt, gateway_withdrawal_alert.token_name, time_frame,
-                // );
-                amt
-            }
+            Ok(amt) => amt,
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -540,7 +512,7 @@ pub async fn start_ethereum_watcher(
             send_alert(
                 &alert_sender.clone(),
                 String::from("Watching ethereum chain"),
-                String::from("Periodically querying the ethereum chain."),
+                String::from("Periodically querying the ethereum chain"),
                 AlertLevel::Info,
             );
 
@@ -810,7 +782,7 @@ mod tests {
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Ethereum Chain: block is taking longer than 20 seconds"));
-            assert!(alert.is_description_equal("Last block was 25 seconds ago."));
+            assert!(alert.is_description_equal("Last block was 25 seconds ago"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");

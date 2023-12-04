@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 
-pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed.";
+pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed";
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, Default)]
 pub enum EthereumAction {
@@ -132,8 +132,8 @@ impl WatchtowerEthereumActions {
     {
         send_alert(
             &alert_sender,
-            format!("Pausing {} contract.", contract_name),
-            format!("Pausing {} contract.", contract_name),
+            format!("Pausing {} contract", contract_name),
+            format!("Pausing {} contract", contract_name),
             AlertLevel::Info,
         );
 
@@ -247,6 +247,7 @@ mod tests {
         expected_level: AlertLevel,
     ) {
         if let Some(alert) = alert_receiver.recv().await {
+            println!("{:?}", alert);
             assert!(alert.is_name_equal(expected_name));
             assert!(alert.is_description_equal(expected_description));
             assert!(alert.is_level_equal(expected_level));
@@ -258,7 +259,6 @@ mod tests {
     #[tokio::test]
     async fn test_handle_pause_state_action() {
         let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
-
         let (alert_sender, mut alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
 
         let mut mock_state_contract: MockStateContractTrait = MockStateContractTrait::new();
@@ -345,15 +345,15 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-            "Pausing state contract.",
-            "Pausing state contract.",
+            "Pausing state contract",
+            "Pausing state contract",
             AlertLevel::Info,
         )
         .await;
         assert_alert_received(
             &mut alert_receiver,
-            "Timeout while pausing state contract.",
-            "Timeout while pausing state contract.",
+            "Timeout while pausing state contract",
+            "Timeout while pausing state contract",
             AlertLevel::Error,
         )
         .await;
@@ -396,14 +396,14 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-            "Pausing state contract.",
-            "Pausing state contract.",
+            "Pausing state contract",
+            "Pausing state contract",
             AlertLevel::Info,
         )
         .await;
         assert_alert_received(
             &mut alert_receiver,
-            "Failed to pause state contract.",
+            "Failed to pause state contract",
             "Mock pause error",
             AlertLevel::Error,
         )

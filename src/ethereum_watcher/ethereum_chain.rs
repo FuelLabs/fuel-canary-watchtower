@@ -69,7 +69,6 @@ impl<P: Middleware + 'static> EthereumChainTrait for EthereumChain<P> {
         if millis_now >= last_block_timestamp {
             Ok((millis_now - last_block_timestamp) as u32)
         } else {
-            // If the node is ahead of our system time return 0 diff, no need to error.
             Ok(0)
         }
     }

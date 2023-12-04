@@ -11,7 +11,6 @@ use ethers::types::{Filter, H160, H256, U256};
 use async_trait::async_trait;
 
 use std::cmp::max;
-use std::ops::Mul;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -80,7 +79,7 @@ impl<P: Middleware + 'static> GatewayContractTrait for GatewayContract<P> {
             self.contract = Some(contract);
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Invalid gateway contract."))
+            Err(anyhow::anyhow!("Invalid gateway contract"))
         }
     }
 
@@ -110,7 +109,7 @@ impl<P: Middleware + 'static> GatewayContractTrait for GatewayContract<P> {
                 Ok(logs) => {
                     let mut total = U256::zero();
                     for log in logs {
-                        let amount = U256::from_big_endian(&log.data[0..32]).mul(U256::from(1_000_000_000));
+                        let amount = U256::from_big_endian(&log.data[0..32]);
                         total += amount;
                     }
                     return Ok(total);
@@ -152,7 +151,7 @@ impl<P: Middleware + 'static> GatewayContractTrait for GatewayContract<P> {
                 Ok(logs) => {
                     let mut total = U256::zero();
                     for log in logs {
-                        let amount = U256::from_big_endian(&log.data[0..32]).mul(U256::from(1_000_000_000));
+                        let amount = U256::from_big_endian(&log.data[0..32]);
                         total += amount;
                     }
                     return Ok(total);
@@ -170,7 +169,7 @@ impl<P: Middleware + 'static> GatewayContractTrait for GatewayContract<P> {
 
     async fn pause(&self) -> Result<()> {
         if self.read_only {
-            return Err(anyhow::anyhow!("Ethereum account not configured."));
+            return Err(anyhow::anyhow!("Ethereum account not configured"));
         }
 
         let contract = self
@@ -292,7 +291,7 @@ mod tests {
         let total_amount: U256 = result.unwrap();
         assert_eq!(
             total_amount.as_u64(),
-            330000000000000,
+            330000,
             "Total amount deposited does not match expected value"
         );
     }
@@ -302,7 +301,7 @@ mod tests {
         let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
         let gateway_contract = setup_gateway_contract(provider, mock.clone(), wallet).expect("Setup failed");
 
-        // Create and extend the vectors with the encoded withdrawal amounts, multiplied by 1_000_000_000
+        // Create and extend the vectors with the encoded withdrawal amounts
         let withdrawal_data_one = ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]);
         let withdrawal_data_two = ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]);
 
@@ -349,7 +348,7 @@ mod tests {
         assert!(result.is_ok(), "Failed to get token amount withdrawn");
 
         let total_amount: U256 = result.unwrap();
-        let expected_total = 330000u64 * 1_000_000_000;
+        let expected_total = 330000u64;
         assert_eq!(
             total_amount.as_u64(),
             expected_total,

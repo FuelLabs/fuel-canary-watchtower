@@ -64,7 +64,7 @@ impl<P: Middleware + 'static> StateContractTrait for StateContract<P> {
 
         // Try calling a read function to check if the contract is valid
         match contract.paused().call().await {
-            Err(_) => Err(anyhow::anyhow!("Invalid state contract.")),
+            Err(_) => Err(anyhow::anyhow!("Invalid state contract")),
             Ok(_) => {
                 self.contract = Some(contract);
                 Ok(())
@@ -94,7 +94,7 @@ impl<P: Middleware + 'static> StateContractTrait for StateContract<P> {
 
     async fn pause(&self) -> Result<()> {
         if self.read_only {
-            return Err(anyhow::anyhow!("Ethereum account not configured."));
+            return Err(anyhow::anyhow!("Ethereum account not configured"));
         }
 
         let contract = self

@@ -81,7 +81,7 @@ async fn check_fuel_block_production(
                 "Fuel Chain: block is taking longer than {} seconds",
                 watch_config.block_production_alert.max_block_time
             ),
-            format!("Last block was {} seconds ago.", seconds_since_last_block),
+            format!("Last block was {} seconds ago", seconds_since_last_block),
             watch_config.block_production_alert.alert_level.clone(),
         );
         send_action(
@@ -104,14 +104,7 @@ async fn check_fuel_base_asset_withdrawals(
         }
         let time_frame = portal_withdrawal_alert.time_frame;
         let amount = match fuel_chain.get_base_amount_withdrawn(time_frame).await {
-            Ok(amt) => {
-                // let formatted_amt = convert_to_decimal_u64(amt, portal_withdrawal_alert.token_decimals);
-                // println!(
-                //     "Fuel Chain: {}{} withdrawn over a period of {} seconds",
-                //     formatted_amt, portal_withdrawal_alert.token_name, time_frame,
-                // );
-                amt
-            }
+            Ok(amt) => amt,
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -173,14 +166,7 @@ async fn check_fuel_token_withdrawals(
             .get_token_amount_withdrawn(time_frame, &gateway_withdrawal_alert.token_address)
             .await
         {
-            Ok(amt) => {
-                // let formatted_amt = convert_to_decimal_u64(amt, gateway_withdrawal_alert.token_decimals);
-                // println!(
-                //     "Fuel Chain: {}{} withdrawn over a period of {} seconds",
-                //     formatted_amt, gateway_withdrawal_alert.token_name, time_frame,
-                // );
-                amt
-            }
+            Ok(amt) => amt,
             Err(e) => {
                 send_alert(
                     &alert_sender,
@@ -241,7 +227,7 @@ pub async fn start_fuel_watcher(
             send_alert(
                 &alert_sender.clone(),
                 String::from("Watching fuel chain"),
-                String::from("Periodically querying the fuel chain."),
+                String::from("Periodically querying the fuel chain"),
                 AlertLevel::Info,
             );
 
@@ -482,7 +468,7 @@ mod tests {
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
             assert!(alert.is_name_equal("Fuel Chain: block is taking longer than 60 seconds"));
-            assert!(alert.is_description_equal("Last block was 70 seconds ago."));
+            assert!(alert.is_description_equal("Last block was 70 seconds ago"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");

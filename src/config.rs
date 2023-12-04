@@ -166,13 +166,13 @@ pub fn load_config(file_path: &str) -> Result<WatchtowerConfig> {
 
     // Fill in the ethereum wallet key
     if config.ethereum_wallet_key.is_some() {
-        log::warn!("Specifying the ethereum private key in the config file is not safe. Please use the {} environment variable instead.", PRIVATE_KEY_ENV_VAR);
+        log::warn!("Specifying the ethereum private key in the config file is not safe. Please use the {} environment variable instead", PRIVATE_KEY_ENV_VAR);
     } else {
         config.ethereum_wallet_key = match env::var(PRIVATE_KEY_ENV_VAR) {
             Ok(wallet_key) => Some(wallet_key),
             Err(_) => {
                 log::warn!(
-                    "{} environment variable not specified. Some alerts and actions have been disabled.",
+                    "{} environment variable not specified. Some alerts and actions have been disabled",
                     PRIVATE_KEY_ENV_VAR
                 );
                 None
@@ -183,7 +183,7 @@ pub fn load_config(file_path: &str) -> Result<WatchtowerConfig> {
     // Fill in the pagerduty api key
     if config.pagerduty_api_key.is_some() {
         log::warn!(
-            "Specifying the pagerduty api key in the config file is not safe. Please use the {} environment variable instead.",
+            "Specifying the pagerduty api key in the config file is not safe. Please use the {} environment variable instead",
             PAGERDUTY_KEY_ENV_VAR,
         );
     } else {
@@ -192,7 +192,7 @@ pub fn load_config(file_path: &str) -> Result<WatchtowerConfig> {
             Ok(wallet_key) => Some(wallet_key),
             Err(_) => {
                 log::error!(
-                    "{} environment variable not specified. Alerting on PagerDuty has been disabled.",
+                    "{} environment variable not specified. Alerting on PagerDuty has been disabled",
                     PAGERDUTY_KEY_ENV_VAR
                 );
                 None

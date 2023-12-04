@@ -76,7 +76,7 @@ impl <P: Middleware + 'static> PortalContractTrait for PortalContract<P>{
             self.contract = Some(contract);
             Ok(())
         } else {
-            Err(anyhow::anyhow!("Invalid portal contract."))
+            Err(anyhow::anyhow!("Invalid portal contract"))
         }
     }
 
@@ -154,7 +154,7 @@ impl <P: Middleware + 'static> PortalContractTrait for PortalContract<P>{
 
     async fn pause(&self) -> Result<()> {
         if self.read_only {
-            return Err(anyhow::anyhow!("Ethereum account not configured."));
+            return Err(anyhow::anyhow!("Ethereum account not configured"));
         }
 
         let contract = self
