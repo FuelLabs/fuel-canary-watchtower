@@ -145,8 +145,8 @@ async fn handle_watcher_threads(
     if let Err(e) = ethereum_thread.await {
         send_alert(
             &alert_sender.clone(),
-            String::from("Ethereum watcher thread failed."),
-            String::from("Ethereum watcher thread failed."),
+            String::from("Ethereum watcher thread failed"),
+            format!("Error: {}", e),
             AlertLevel::Error,
         );
         return Err(anyhow::anyhow!("Ethereum watcher thread failed: {}", e));
@@ -155,8 +155,8 @@ async fn handle_watcher_threads(
     if let Err(e) = fuel_thread.await {
         send_alert(
             &alert_sender.clone(),
-            String::from("Fuel watcher thread failed."),
-            String::from("Fuel watcher thread failed."),
+            String::from("Fuel watcher thread failed"),
+            format!("Error: {}", e),
             AlertLevel::Error,
         );
         return Err(anyhow::anyhow!("Fuel watcher thread failed: {}", e));
