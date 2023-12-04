@@ -495,8 +495,8 @@ mod tests {
         .await;
         assert_alert_received(
             &mut alert_receiver,
-            "Successfully paused portal contract.",
-            "Successfully paused portal contract.",
+            "Successfully paused portal contract",
+            "Successfully paused portal contract",
             AlertLevel::Info,
         )
         .await;
@@ -579,8 +579,8 @@ mod tests {
         .await;
         assert_alert_received(
             &mut alert_receiver,
-            "Successfully paused portal contract.",
-            "Successfully paused portal contract.",
+            "Successfully paused portal contract",
+            "Successfully paused portal contract",
             AlertLevel::Info,
         )
         .await;
