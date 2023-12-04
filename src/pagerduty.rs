@@ -1,7 +1,7 @@
-use std::{sync::Arc, fmt};
+use std::{fmt, sync::Arc};
 
 use async_trait::async_trait;
-use reqwest::{Client,Error as ReqwestError};
+use reqwest::{Client, Error as ReqwestError};
 use serde::Serialize;
 
 #[cfg(test)]
@@ -64,19 +64,10 @@ pub struct PagerDutyEventPayload {
 // Implement the PagerDutyClientTrait for PagerDutyClient
 impl PagerDutyClient {
     pub fn new(api_key: String, http_client: Arc<dyn HttpPoster>) -> Self {
-        PagerDutyClient {
-            api_key,
-            http_client,
-        }
+        PagerDutyClient { api_key, http_client }
     }
 
-    pub async fn send_alert(
-        &self,
-        severity: String,
-        summary: String,
-        source: String,
-    ) -> Result<(), ReqwestError> {
-
+    pub async fn send_alert(&self, severity: String, summary: String, source: String) -> Result<(), ReqwestError> {
         // Create a payload to send to PagerDuty
         let payload = PagerDutyPayload {
             payload: PagerDutyEventPayload {

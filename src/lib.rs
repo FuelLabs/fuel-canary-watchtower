@@ -3,65 +3,46 @@ pub mod test_utils;
 
 mod alerter;
 mod config;
-mod pagerduty;
 mod ethereum_actions;
 mod ethereum_watcher;
 mod fuel_watcher;
+mod pagerduty;
 
 use std::sync::Arc;
 
-pub use config::{load_config, WatchtowerConfig};
-use alerter::{WatchtowerAlerter, send_alert, AlertParams, AlertLevel};
+use crate::ethereum_watcher::{
+    gateway_contract::{GatewayContract, GatewayContractTrait},
+    portal_contract::{PortalContract, PortalContractTrait},
+    state_contract::{StateContract, StateContractTrait},
+};
+use alerter::{send_alert, AlertLevel, AlertParams, WatchtowerAlerter};
 use anyhow::Result;
-use ethers::middleware::Middleware;
+pub use config::{load_config, WatchtowerConfig};
 use ethereum_actions::WatchtowerEthereumActions;
 use ethereum_watcher::{
-    ethereum_utils::{
-        setup_ethereum_provider, setup_ethereum_wallet,
-    },
     ethereum_chain::{EthereumChain, EthereumChainTrait},
+    ethereum_utils::{setup_ethereum_provider, setup_ethereum_wallet},
     start_ethereum_watcher,
 };
-use fuel_watcher::{start_fuel_watcher, fuel_chain::FuelChainTrait};
+use ethers::middleware::Middleware;
+use fuel_watcher::{fuel_chain::FuelChainTrait, start_fuel_watcher};
 use pagerduty::PagerDutyClient;
 use reqwest::Client;
-use tokio::{task::JoinHandle, sync::mpsc::UnboundedSender};
-use crate::ethereum_watcher::{
-    gateway_contract::{
-        GatewayContract,
-        GatewayContractTrait,
-    },
-    portal_contract::{
-        PortalContract,
-        PortalContractTrait,
-    },
-    state_contract::{
-        StateContract,
-        StateContractTrait,
-    }
-};
+use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 
-use crate::fuel_watcher::fuel_utils::setup_fuel_provider;
 use crate::fuel_watcher::fuel_chain::FuelChain;
+use crate::fuel_watcher::fuel_utils::setup_fuel_provider;
 
 pub async fn run(config: &WatchtowerConfig) -> Result<()> {
-
     // Setup the providers and wallets.
     let fuel_provider = setup_fuel_provider(&config.fuel_graphql).await?;
-    let ether_provider = setup_ethereum_provider(
-        &config.ethereum_rpc,
-    ).await?;
+    let ether_provider = setup_ethereum_provider(&config.ethereum_rpc).await?;
     let chain_id: u64 = ether_provider.get_chainid().await?.as_u64();
-    let (wallet, read_only) = setup_ethereum_wallet(
-        config.ethereum_wallet_key.clone(),
-        chain_id,
-    )?;
+    let (wallet, read_only) = setup_ethereum_wallet(config.ethereum_wallet_key.clone(), chain_id)?;
 
     // Create the chains.
     let fuel_chain: FuelChain = FuelChain::new(fuel_provider).unwrap();
-    let ethereum_chain = EthereumChain::new(
-        ether_provider.clone(),
-    ).await?;
+    let ethereum_chain = EthereumChain::new(ether_provider.clone()).await?;
 
     // Setup the ethereum based contracts.
     let state_contract_address: String = config.state_contract_address.to_string();
@@ -73,19 +54,17 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
         read_only,
         ether_provider.clone(),
         wallet.clone(),
-    ).unwrap();
+    )
+    .unwrap();
     let mut portal_contract = PortalContract::new(
         portal_contract_address,
         read_only,
         ether_provider.clone(),
         wallet.clone(),
-    ).unwrap();
-    let mut gateway_contract = GatewayContract::new(
-        gateway_contract_address,
-        read_only,
-        ether_provider,
-        wallet,
-    ).unwrap();
+    )
+    .unwrap();
+    let mut gateway_contract =
+        GatewayContract::new(gateway_contract_address, read_only, ether_provider, wallet).unwrap();
 
     // Initialize the contracts.
     state_contract.initialize().await?;
@@ -99,11 +78,13 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     let arc_ethereum_chain = Arc::new(ethereum_chain) as Arc<dyn EthereumChainTrait>;
     let arc_fuel_chain = Arc::new(fuel_chain) as Arc<dyn FuelChainTrait>;
 
-    let pagerduty_client: Option<PagerDutyClient> = config.pagerduty_api_key.clone().map(|api_key| PagerDutyClient::new(api_key, Arc::new(Client::new())));
+    let pagerduty_client: Option<PagerDutyClient> = config
+        .pagerduty_api_key
+        .clone()
+        .map(|api_key| PagerDutyClient::new(api_key, Arc::new(Client::new())));
 
-    let alerts = WatchtowerAlerter::new(config, pagerduty_client).map_err(
-        |e| anyhow::anyhow!("Failed to setup alerts: {}", e),
-    )?;
+    let alerts = WatchtowerAlerter::new(config, pagerduty_client)
+        .map_err(|e| anyhow::anyhow!("Failed to setup alerts: {}", e))?;
     alerts.start_alert_handling_thread();
 
     let actions = WatchtowerEthereumActions::new(
@@ -123,15 +104,19 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
         &arc_state_contract,
         &arc_portal_contract,
         &arc_gateway_contract,
-    ).await?;
+    )
+    .await?;
     let fuel_thread = start_fuel_watcher(
         config,
         &arc_fuel_chain,
         actions.get_action_sender(),
         alerts.get_alert_sender(),
-    ).await?;
+    )
+    .await?;
 
-    handle_watcher_threads(fuel_thread,ethereum_thread, alerts.get_alert_sender()).await.unwrap();
+    handle_watcher_threads(fuel_thread, ethereum_thread, alerts.get_alert_sender())
+        .await
+        .unwrap();
 
     Ok(())
 }
@@ -141,7 +126,6 @@ async fn handle_watcher_threads(
     ethereum_thread: JoinHandle<()>,
     alert_sender: UnboundedSender<AlertParams>,
 ) -> Result<()> {
-
     if let Err(e) = ethereum_thread.await {
         send_alert(
             &alert_sender.clone(),

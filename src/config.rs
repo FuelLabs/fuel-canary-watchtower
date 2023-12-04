@@ -198,4 +198,3 @@ pub fn convert_to_decimal_u64(amt: u64, decimals: u8) -> String {
     let formatted_amt = format!("{:.6}", amt_decimal); // Format with up to 6 decimal places
     formatted_amt.trim_end_matches('0').trim_end_matches('.').to_string()
 }
-

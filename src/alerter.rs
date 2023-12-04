@@ -1,12 +1,12 @@
-use crate::WatchtowerConfig;
 use crate::pagerduty::PagerDutyClient;
+use crate::WatchtowerConfig;
 
 use anyhow::Result;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, Instant};
-use tokio::sync::mpsc::{self, UnboundedSender, UnboundedReceiver};
+use std::time::{Duration, Instant, SystemTime};
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug, Default)]
@@ -27,7 +27,11 @@ pub struct AlertParams {
 
 impl AlertParams {
     pub fn new(name: String, description: String, alert_level: AlertLevel) -> Self {
-        AlertParams { name, description, alert_level }
+        AlertParams {
+            name,
+            description,
+            alert_level,
+        }
     }
 
     #[cfg(test)]
@@ -47,7 +51,7 @@ impl AlertParams {
 }
 
 #[derive(Clone, Debug)]
-pub struct WatchtowerAlerter{
+pub struct WatchtowerAlerter {
     alert_sender: UnboundedSender<AlertParams>,
     alert_receiver: Arc<Mutex<UnboundedReceiver<AlertParams>>>,
     alert_cache: Arc<Mutex<HashMap<String, Instant>>>,
@@ -57,17 +61,14 @@ pub struct WatchtowerAlerter{
     allowed_alerting_start_time: SystemTime,
 }
 
-impl WatchtowerAlerter{
+impl WatchtowerAlerter {
     pub fn new(config: &WatchtowerConfig, pagerduty_client: Option<PagerDutyClient>) -> Result<Self> {
         let alert_cache = Arc::new(Mutex::new(HashMap::new()));
         let alert_cache_expiry = config.alert_cache_expiry;
         let watchtower_system_name = config.watchtower_system_name.to_string();
         let allowed_alerting_start_time = SystemTime::now() + config.min_duration_from_start_to_err;
 
-        let (
-            alert_sender,
-            alert_receiver,
-        ) = mpsc::unbounded_channel::<AlertParams>();
+        let (alert_sender, alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
 
         Ok(WatchtowerAlerter {
             alert_sender,
@@ -93,13 +94,14 @@ impl WatchtowerAlerter{
             let mut rx = alert_receiver.lock().await;
             while let Some(params) = rx.recv().await {
                 WatchtowerAlerter::handle_alert(
-                    params, 
+                    params,
                     Arc::clone(&cache),
                     &pagerduty_client,
                     &watchtower_system_name,
                     alert_cache_expiry,
-                    allowed_alerting_start_time
-                ).await;
+                    allowed_alerting_start_time,
+                )
+                .await;
             }
         });
     }
@@ -111,7 +113,7 @@ impl WatchtowerAlerter{
         pagerduty_client: &Option<PagerDutyClient>,
         watchtower_system_name: &str,
         alert_cache_expiry: Duration,
-        allowed_alerting_start_time: SystemTime
+        allowed_alerting_start_time: SystemTime,
     ) {
         let now = Instant::now();
         let mut cache = cache.lock().await;
@@ -132,13 +134,17 @@ impl WatchtowerAlerter{
 
             // Send alert to PagerDuty if conditions are met and the client is set
             if SystemTime::now() >= allowed_alerting_start_time
-                && (params.alert_level == AlertLevel::Warn || params.alert_level == AlertLevel::Error) {
+                && (params.alert_level == AlertLevel::Warn || params.alert_level == AlertLevel::Error)
+            {
                 if let Some(client) = pagerduty_client {
-                    if let Err(e) = client.send_alert(
-                        severity.to_string(),
-                        format!("{}: {}", params.name, params.description),
-                        watchtower_system_name.to_string()
-                    ).await {
+                    if let Err(e) = client
+                        .send_alert(
+                            severity.to_string(),
+                            format!("{}: {}", params.name, params.description),
+                            watchtower_system_name.to_string(),
+                        )
+                        .await
+                    {
                         log::error!("Failed to send alert to PagerDuty: {}", e);
                     }
                 }
@@ -173,8 +179,7 @@ pub fn send_alert(
     description: String,
     alert_level: AlertLevel,
 ) {
-    if let Err(e) = alert_sender.send(
-        AlertParams::new(name, description, alert_level)) {
+    if let Err(e) = alert_sender.send(AlertParams::new(name, description, alert_level)) {
         log::error!("Failed to send alert: {}", e);
     }
 }
@@ -182,7 +187,7 @@ pub fn send_alert(
 #[cfg(test)]
 mod watchtower_alerter_tests {
     use super::*;
-    use crate::pagerduty::{PagerDutyClient, MockHttpPoster};
+    use crate::pagerduty::{MockHttpPoster, PagerDutyClient};
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -197,16 +202,10 @@ mod watchtower_alerter_tests {
 
         // Create a PagerDutyClient
         let mock_http_poster: MockHttpPoster = MockHttpPoster::new();
-        let mock_pagerduty_client = PagerDutyClient::new(
-            "test_api_key".to_string(), 
-            Arc::new(mock_http_poster),
-        );
+        let mock_pagerduty_client = PagerDutyClient::new("test_api_key".to_string(), Arc::new(mock_http_poster));
 
         // Create the WatchtowerAlerter
-        let alerter = WatchtowerAlerter::new(
-            &config,
-             Some(mock_pagerduty_client),
-            ).unwrap();
+        let alerter = WatchtowerAlerter::new(&config, Some(mock_pagerduty_client)).unwrap();
 
         // Assert that the WatchtowerAlerter is initialized correctly
         assert_eq!(alerter.alert_cache.lock().await.len(), 0);
@@ -228,54 +227,59 @@ mod watchtower_alerter_tests {
         let mut mock_http_poster: MockHttpPoster = MockHttpPoster::new();
 
         // Set up expected behavior for the mock HTTP poster
-        mock_http_poster.expect_post()
-        .withf(|url, payload| url == "https://events.eu.pagerduty.com/v2/enqueue"
-            && payload.routing_key == "test_api_key"
-            && (payload.payload.severity == "critical" || payload.payload.severity == "warning"))
-        .times(2)
-        .returning(|_, _| Box::pin(async { Ok(()) }));
+        mock_http_poster
+            .expect_post()
+            .withf(|url, payload| {
+                url == "https://events.eu.pagerduty.com/v2/enqueue"
+                    && payload.routing_key == "test_api_key"
+                    && (payload.payload.severity == "critical" || payload.payload.severity == "warning")
+            })
+            .times(2)
+            .returning(|_, _| Box::pin(async { Ok(()) }));
 
-        let mock_pagerduty_client = PagerDutyClient::new(
-            "test_api_key".to_string(), 
-            Arc::new(mock_http_poster),
-        );
+        let mock_pagerduty_client = PagerDutyClient::new("test_api_key".to_string(), Arc::new(mock_http_poster));
 
         // Create the WatchtowerAlerter
-        let alerter = WatchtowerAlerter::new(
-            &config,
-             Some(mock_pagerduty_client),
-        ).unwrap();
+        let alerter = WatchtowerAlerter::new(&config, Some(mock_pagerduty_client)).unwrap();
 
         // Start the WatchtowerAlerter thread
         alerter.start_alert_handling_thread();
 
         // Critical and warning are expected to be passed on to pagerduty
-        assert!(alerter.alert_sender.send(
-            AlertParams::new(
+        assert!(alerter
+            .alert_sender
+            .send(AlertParams::new(
                 String::from("Critical alert"),
                 String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::Error,
-        )).is_ok());
-        assert!(alerter.alert_sender.send(
-            AlertParams::new(
+            ))
+            .is_ok());
+        assert!(alerter
+            .alert_sender
+            .send(AlertParams::new(
                 String::from("Warning alert"),
                 String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::Warn,
-        )).is_ok());
-        
+            ))
+            .is_ok());
+
         // Info and None are not passed on to pagerduty
-        assert!(alerter.alert_sender.send(
-            AlertParams::new(
+        assert!(alerter
+            .alert_sender
+            .send(AlertParams::new(
                 String::from("Info alert"),
                 String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::Info,
-        )).is_ok());
-        assert!(alerter.alert_sender.send(
-            AlertParams::new(
+            ))
+            .is_ok());
+        assert!(alerter
+            .alert_sender
+            .send(AlertParams::new(
                 String::from("No alert"),
                 String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::None,
-        )).is_ok());
+            ))
+            .is_ok());
 
         // Allow some time for the alerts to be processed
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -287,7 +291,6 @@ mod watchtower_alerter_tests {
         assert!(alerter.test_is_alert_in_cache(&String::from("No alert")).await);
     }
 
-
     #[tokio::test]
     async fn test_alert_caching_and_expiry() {
         let config = WatchtowerConfig {
@@ -296,43 +299,41 @@ mod watchtower_alerter_tests {
             min_duration_from_start_to_err: Duration::from_secs(0),
             ..Default::default()
         };
-    
-        let mock_pagerduty_client = PagerDutyClient::new(
-            "test_api_key".to_string(),
-             Arc::new(MockHttpPoster::new()),
-        );
-    
-        let alerter = WatchtowerAlerter::new(
-            &config,
-             Some(mock_pagerduty_client),
-        ).unwrap();
+
+        let mock_pagerduty_client = PagerDutyClient::new("test_api_key".to_string(), Arc::new(MockHttpPoster::new()));
+
+        let alerter = WatchtowerAlerter::new(&config, Some(mock_pagerduty_client)).unwrap();
 
         // Start the WatchtowerAlerter thread
         alerter.start_alert_handling_thread();
 
-        assert!(alerter.alert_sender.send(
-            AlertParams::new(
+        assert!(alerter
+            .alert_sender
+            .send(AlertParams::new(
                 String::from("Info alert"),
                 String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::Info,
-        )).is_ok());
+            ))
+            .is_ok());
 
         // Allow some time for the alerts to be processed
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Initially, the alert should be in cache
         assert!(alerter.test_is_alert_in_cache(&String::from("Info alert")).await);
-    
+
         // Wait for longer than the expiry duration
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         // Send another alert so that the cache clears
-        assert!(alerter.alert_sender.send(
-            AlertParams::new(
+        assert!(alerter
+            .alert_sender
+            .send(AlertParams::new(
                 String::from("None alert"),
                 String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::None,
-        )).is_ok());
+            ))
+            .is_ok());
 
         // Allow some time for the alerts to be processed
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -350,7 +351,7 @@ mod watchtower_alerter_tests {
             min_duration_from_start_to_err: Duration::from_secs(300),
             ..Default::default()
         };
-    
+
         let mut mock_http_poster: MockHttpPoster = MockHttpPoster::new();
         mock_http_poster.expect_post()
             .times(0) // Expect no calls as the start time has not elapsed
@@ -360,26 +361,30 @@ mod watchtower_alerter_tests {
             &config,
             Some(PagerDutyClient::new(
                 "test_api_key".to_string(),
-                 Arc::new(mock_http_poster),
+                Arc::new(mock_http_poster),
             )),
-            ).unwrap();
+        )
+        .unwrap();
 
         // Start the WatchtowerAlerter thread
         alerter.start_alert_handling_thread();
 
         // Attempt to send an alert and since no errors are triggered `mock_http_poster` was not executed.
-        assert!(alerter.alert_sender.send(
-            AlertParams::new(
+        assert!(alerter
+            .alert_sender
+            .send(AlertParams::new(
                 String::from("Critical alert"),
                 String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::Error,
-        )).is_ok());
-        assert!(alerter.alert_sender.send(
-            AlertParams::new(
+            ))
+            .is_ok());
+        assert!(alerter
+            .alert_sender
+            .send(AlertParams::new(
                 String::from("Warn alert"),
                 String::from("Ethereum Contract Query Failed!"),
                 AlertLevel::Warn,
-        )).is_ok());
+            ))
+            .is_ok());
     }
-
 }

@@ -1,18 +1,18 @@
 #[cfg(test)]
 pub mod test_utils {
+    use anyhow::Result;
     use ethers::prelude::k256::ecdsa::SigningKey;
-    use ethers::prelude::{Provider, Wallet, MockProvider, MockResponse, U64};
+    use ethers::prelude::{MockProvider, MockResponse, Provider, Wallet, U64};
     use ethers::signers::Signer;
     use std::sync::Arc;
     use std::time::Duration;
-    use anyhow::Result;
 
-    use crate::WatchtowerConfig;
     use crate::alerter::WatchtowerAlerter;
     use crate::ethereum_watcher::gateway_contract::GatewayContract;
     use crate::ethereum_watcher::portal_contract::PortalContract;
     use crate::ethereum_watcher::state_contract::StateContract;
     use crate::pagerduty::{MockHttpPoster, PagerDutyClient};
+    use crate::WatchtowerConfig;
 
     pub static ETHEREUM_CONNECTION_RETRIES: u64 = 2;
     pub static ETHEREUM_BLOCK_TIME: u64 = 12;
@@ -25,12 +25,15 @@ pub mod test_utils {
     const PAUSED_RESPONSE_HEX: &str = "0x0000000000000000000000000000000000000000000000000000000000000000";
     const READ_ONLY: bool = false;
 
-    pub fn setup_wallet_and_provider() -> Result<(Arc<Provider<MockProvider>>, Arc<MockProvider>, Wallet<SigningKey>), anyhow::Error> {
+    pub fn setup_wallet_and_provider(
+    ) -> Result<(Arc<Provider<MockProvider>>, Arc<MockProvider>, Wallet<SigningKey>), anyhow::Error> {
         let chain_id = U64::from(1337);
         let (provider, mock) = Provider::mocked();
         let arc_provider = Arc::new(provider);
         let arc_mock = Arc::new(mock);
-        let wallet = DEFAULT_KEY.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
+        let wallet = DEFAULT_KEY
+            .parse::<Wallet<SigningKey>>()?
+            .with_chain_id(chain_id.as_u64());
         Ok((arc_provider, arc_mock, wallet))
     }
 
@@ -45,12 +48,8 @@ pub mod test_utils {
         wallet: Wallet<SigningKey>,
     ) -> Result<PortalContract<Provider<MockProvider>>, Box<dyn std::error::Error>> {
         setup_mock_response(&mock);
-        let portal_contract: PortalContract<Provider<MockProvider>> = PortalContract::new(
-            DEFAULT_PORTAL_CONTRACT_ADDRESS.to_string(),
-            READ_ONLY,
-            provider,
-            wallet,
-        )?;
+        let portal_contract: PortalContract<Provider<MockProvider>> =
+            PortalContract::new(DEFAULT_PORTAL_CONTRACT_ADDRESS.to_string(), READ_ONLY, provider, wallet)?;
 
         Ok(portal_contract)
     }
@@ -77,12 +76,8 @@ pub mod test_utils {
         wallet: Wallet<SigningKey>,
     ) -> Result<StateContract<Provider<MockProvider>>, Box<dyn std::error::Error>> {
         setup_mock_response(&mock);
-        let state_contract: StateContract<Provider<MockProvider>> = StateContract::new(
-            DEFAULT_STATE_CONTRACT_ADDRESS.to_string(),
-            READ_ONLY,
-            provider,
-            wallet,
-        )?;
+        let state_contract: StateContract<Provider<MockProvider>> =
+            StateContract::new(DEFAULT_STATE_CONTRACT_ADDRESS.to_string(), READ_ONLY, provider, wallet)?;
 
         Ok(state_contract)
     }
@@ -98,10 +93,8 @@ pub mod test_utils {
 
         // Create a PagerDutyClient with a mock HTTP poster
         let mock_http_poster: MockHttpPoster = MockHttpPoster::new();
-        let mock_pagerduty_client = PagerDutyClient::new(
-            DEFAULT_PAGERDUTY_API_KEY.to_string(), 
-            Arc::new(mock_http_poster),
-        );
+        let mock_pagerduty_client =
+            PagerDutyClient::new(DEFAULT_PAGERDUTY_API_KEY.to_string(), Arc::new(mock_http_poster));
 
         // Create and return the WatchtowerAlerter
         WatchtowerAlerter::new(&config, Some(mock_pagerduty_client))

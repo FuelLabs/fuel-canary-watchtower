@@ -7,14 +7,14 @@ use serde::Deserialize;
 
 use anyhow::Result;
 
-use crate::alerter::{AlertLevel, AlertParams, send_alert};
-use crate::ethereum_watcher::state_contract::StateContractTrait;
+use crate::alerter::{send_alert, AlertLevel, AlertParams};
 use crate::ethereum_watcher::gateway_contract::GatewayContractTrait;
 use crate::ethereum_watcher::portal_contract::PortalContractTrait;
+use crate::ethereum_watcher::state_contract::StateContractTrait;
 
-use tokio::sync::mpsc::{self, UnboundedSender, UnboundedReceiver};
-use tokio::time::timeout;
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
+use tokio::time::timeout;
 
 pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed.";
 
@@ -27,7 +27,6 @@ pub enum EthereumAction {
     PausePortal,
     PauseAll,
 }
-
 
 #[derive(Clone, Debug)]
 pub struct ActionParams {
@@ -75,17 +74,14 @@ impl fmt::Debug for WatchtowerEthereumActions {
     }
 }
 
-impl WatchtowerEthereumActions{
+impl WatchtowerEthereumActions {
     pub fn new(
         alert_sender: UnboundedSender<AlertParams>,
         state_contract: Arc<dyn StateContractTrait>,
         portal_contract: Arc<dyn PortalContractTrait>,
         gateway_contract: Arc<dyn GatewayContractTrait>,
     ) -> Self {
-        let (
-            action_sender,
-            action_receiver,
-        ) = mpsc::unbounded_channel::<ActionParams>();
+        let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
 
         WatchtowerEthereumActions {
             action_sender,
@@ -114,7 +110,8 @@ impl WatchtowerEthereumActions{
                     Arc::clone(&portal_contract),
                     Arc::clone(&gateway_contract),
                     params.alert_level,
-                ).await;
+                )
+                .await;
             }
             send_alert(
                 &alert_sender,
@@ -131,29 +128,28 @@ impl WatchtowerEthereumActions{
         pause_future: F,
         alert_sender: UnboundedSender<AlertParams>,
         alert_level: AlertLevel,
-    )
-        where
-            F: Future<Output = Result<(), anyhow::Error>> + Send,
+    ) where
+        F: Future<Output = Result<(), anyhow::Error>> + Send,
     {
         send_alert(
             &alert_sender,
             format!("Pausing {} contract.", contract_name),
             format!("Pausing {} contract.", contract_name),
-             AlertLevel::Info,
+            AlertLevel::Info,
         );
 
         // Set a duration for the timeout
         let timeout_duration = Duration::from_secs(30);
-    
+
         match timeout(timeout_duration, pause_future).await {
             Ok(Ok(_)) => {
                 send_alert(
                     &alert_sender,
                     format!("Successfully paused {} contract.", contract_name),
                     format!("Successfully paused {} contract.", contract_name),
-                     AlertLevel::Info,
+                    AlertLevel::Info,
                 );
-            },
+            }
             Ok(Err(e)) => {
                 // This is the case where pause_future completed, but resulted in an error.
                 send_alert(
@@ -162,7 +158,7 @@ impl WatchtowerEthereumActions{
                     e.to_string(),
                     alert_level,
                 );
-            },
+            }
             Err(_) => {
                 // This is the timeout case
                 send_alert(
@@ -185,30 +181,32 @@ impl WatchtowerEthereumActions{
     ) {
         match action {
             EthereumAction::PauseState => {
+                Self::pause_contract("state", state_contract.pause(), alert_sender, alert_level).await;
+            }
+            EthereumAction::PauseGateway => {
+                Self::pause_contract("gateway", gateway_contract.pause(), alert_sender, alert_level).await;
+            }
+            EthereumAction::PausePortal => {
+                Self::pause_contract("portal", portal_contract.pause(), alert_sender, alert_level).await;
+            }
+            EthereumAction::PauseAll => {
                 Self::pause_contract(
                     "state",
-                     state_contract.pause(),
-                     alert_sender,
-                     alert_level,
-                    ).await;
-            },
-            EthereumAction::PauseGateway => {
+                    state_contract.pause(),
+                    alert_sender.clone(),
+                    alert_level.clone(),
+                )
+                .await;
                 Self::pause_contract(
                     "gateway",
-                     gateway_contract.pause(),
-                     alert_sender,
-                       alert_level,
-                    ).await;
-            },
-            EthereumAction::PausePortal => {
-                Self::pause_contract("portal",portal_contract.pause(), alert_sender,alert_level).await;
-            },
-            EthereumAction::PauseAll => {
-                Self::pause_contract("state", state_contract.pause(), alert_sender.clone(), alert_level.clone()).await;
-                Self::pause_contract("gateway", gateway_contract.pause(), alert_sender.clone(), alert_level.clone()).await;
+                    gateway_contract.pause(),
+                    alert_sender.clone(),
+                    alert_level.clone(),
+                )
+                .await;
                 Self::pause_contract("portal", portal_contract.pause(), alert_sender, alert_level).await;
-            },
-            EthereumAction::None => {},
+            }
+            EthereumAction::None => {}
         }
     }
 
@@ -224,7 +222,7 @@ pub fn send_action(
     alert_level: Option<AlertLevel>,
 ) {
     let alert_level = alert_level.unwrap_or(AlertLevel::Info);
-    let params = ActionParams::new(action, alert_level );
+    let params = ActionParams::new(action, alert_level);
     if let Err(e) = action_sender.send(params) {
         log::error!("Failed to send action: {}", e);
     }
@@ -238,9 +236,8 @@ mod tests {
     use tokio::sync::mpsc;
 
     use crate::ethereum_watcher::{
+        gateway_contract::MockGatewayContractTrait, portal_contract::MockPortalContractTrait,
         state_contract::MockStateContractTrait,
-        portal_contract::MockPortalContractTrait,
-        gateway_contract::MockGatewayContractTrait,
     };
 
     // Util to help tests
@@ -261,26 +258,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_pause_state_action() {
-        let (
-            action_sender,
-            action_receiver,
-        ) = mpsc::unbounded_channel::<ActionParams>();
-    
-        let (
-            alert_sender,
-            mut alert_receiver,
-        ) = mpsc::unbounded_channel::<AlertParams>();
+        let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
+
+        let (alert_sender, mut alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
 
         let mut mock_state_contract: MockStateContractTrait = MockStateContractTrait::new();
         let mut mock_portal_contract: MockPortalContractTrait = MockPortalContractTrait::new();
         let mut mock_gateway_contract: MockGatewayContractTrait = MockGatewayContractTrait::new();
 
         // Mock the behavior of the pause function
-        mock_state_contract.expect_pause()
-            .times(1) 
+        mock_state_contract
+            .expect_pause()
+            .times(1)
             .returning(|| Box::pin(async { Ok(()) }));
         mock_portal_contract.expect_pause().times(0);
-        mock_gateway_contract.expect_pause().times(0); 
+        mock_gateway_contract.expect_pause().times(0);
 
         // Create an instance of WatchtowerEthereumActions
         let actions = WatchtowerEthereumActions {
@@ -291,54 +283,50 @@ mod tests {
             portal_contract: Arc::new(mock_portal_contract),
             gateway_contract: Arc::new(mock_gateway_contract),
         };
-    
+
         // Start the action handling thread
         actions.start_action_handling_thread();
-    
+
         send_action(&action_sender, EthereumAction::PauseState, Some(AlertLevel::Info));
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing state contract.", 
-             "Pausing state contract.", 
-             AlertLevel::Info,
-        ).await;
+            "Pausing state contract.",
+            "Pausing state contract.",
+            AlertLevel::Info,
+        )
+        .await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused state contract.",
             "Successfully paused state contract.",
             AlertLevel::Info,
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_pause_state_contract_timeout() {
-        let (
-            action_sender,
-            action_receiver,
-        ) = mpsc::unbounded_channel::<ActionParams>();
-        let (
-            alert_sender,
-            mut alert_receiver,
-        ) = mpsc::unbounded_channel::<AlertParams>();
+        let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
+        let (alert_sender, mut alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
 
         let mut mock_state_contract: MockStateContractTrait = MockStateContractTrait::new();
         let mut mock_portal_contract: MockPortalContractTrait = MockPortalContractTrait::new();
         let mut mock_gateway_contract: MockGatewayContractTrait = MockGatewayContractTrait::new();
 
         // Mock the behavior of the pause function to never complete
-        mock_state_contract.expect_pause()
-        .times(1)
-        .returning(|| Box::pin(async {
-            // Simulate a long-running future that does not resolve within the test
-            let pending_future: Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + Send>> = Box::pin(async { 
-                tokio::time::sleep(Duration::from_secs(60)).await;
-                Ok(())
-            });
-            pending_future.await
-        }));
+        mock_state_contract.expect_pause().times(1).returning(|| {
+            Box::pin(async {
+                // Simulate a long-running future that does not resolve within the test
+                let pending_future: Pin<Box<dyn Future<Output = Result<(), anyhow::Error>> + Send>> = Box::pin(async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(())
+                });
+                pending_future.await
+            })
+        });
         mock_portal_contract.expect_pause().times(0);
-        mock_gateway_contract.expect_pause().times(0); 
+        mock_gateway_contract.expect_pause().times(0);
 
         // Create an instance of WatchtowerEthereumActions
         let actions = WatchtowerEthereumActions {
@@ -349,37 +337,33 @@ mod tests {
             portal_contract: Arc::new(mock_portal_contract),
             gateway_contract: Arc::new(mock_gateway_contract),
         };
-    
+
         // Start the action handling thread
         actions.start_action_handling_thread();
-    
+
         // Send a PauseState action
         send_action(&action_sender, EthereumAction::PauseState, Some(AlertLevel::Error));
-    
+
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing state contract.",
-             "Pausing state contract.",
-             AlertLevel::Info,
-        ).await;
+            "Pausing state contract.",
+            "Pausing state contract.",
+            AlertLevel::Info,
+        )
+        .await;
         assert_alert_received(
             &mut alert_receiver,
             "Timeout while pausing state contract.",
             "Timeout while pausing state contract.",
             AlertLevel::Error,
-        ).await;
-    }    
+        )
+        .await;
+    }
 
     #[tokio::test]
     async fn test_pause_state_contract_with_error_response() {
-        let (
-            action_sender,
-            action_receiver,
-        ) = mpsc::unbounded_channel::<ActionParams>();
-        let (
-            alert_sender,
-            mut alert_receiver,
-        ) = mpsc::unbounded_channel::<AlertParams>();
+        let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
+        let (alert_sender, mut alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
 
         let mut mock_state_contract = MockStateContractTrait::new();
         let mock_portal_contract: MockPortalContractTrait = MockPortalContractTrait::new();
@@ -387,11 +371,11 @@ mod tests {
 
         // Mock the pause function to return an error
         // Mock the pause function to return an error
-        mock_state_contract.expect_pause()
-        .times(1)
-        .returning(|| Box::pin(async { 
-            Err(anyhow::Error::msg("Mock pause error")) // Create a new error instance here
-        }));
+        mock_state_contract.expect_pause().times(1).returning(|| {
+            Box::pin(async {
+                Err(anyhow::Error::msg("Mock pause error")) // Create a new error instance here
+            })
+        });
 
         let actions = WatchtowerEthereumActions {
             action_sender,
@@ -405,32 +389,32 @@ mod tests {
         actions.start_action_handling_thread();
 
         // Send a PauseState action
-        send_action(&actions.action_sender, EthereumAction::PauseState, Some(AlertLevel::Error));
+        send_action(
+            &actions.action_sender,
+            EthereumAction::PauseState,
+            Some(AlertLevel::Error),
+        );
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing state contract.",
-             "Pausing state contract.",
-             AlertLevel::Info,
-        ).await;
+            "Pausing state contract.",
+            "Pausing state contract.",
+            AlertLevel::Info,
+        )
+        .await;
         assert_alert_received(
             &mut alert_receiver,
             "Failed to pause state contract.",
             "Mock pause error",
             AlertLevel::Error,
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_handle_pause_gateway_action() {
-        let (
-            action_sender,
-            action_receiver,
-        ) = mpsc::unbounded_channel::<ActionParams>();
-        let (
-            alert_sender,
-            mut alert_receiver,
-        ) = mpsc::unbounded_channel::<AlertParams>();
+        let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
+        let (alert_sender, mut alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
 
         let mut mock_state_contract: MockStateContractTrait = MockStateContractTrait::new();
         let mut mock_portal_contract: MockPortalContractTrait = MockPortalContractTrait::new();
@@ -438,11 +422,11 @@ mod tests {
 
         // Mock the behavior of the pause function
         mock_state_contract.expect_pause().times(0);
-        mock_portal_contract.expect_pause().times(0); 
-        mock_gateway_contract.expect_pause()
-            .times(1) 
+        mock_portal_contract.expect_pause().times(0);
+        mock_gateway_contract
+            .expect_pause()
+            .times(1)
             .returning(|| Box::pin(async { Ok(()) }));
-
 
         let actions = WatchtowerEthereumActions {
             action_sender: action_sender.clone(),
@@ -459,28 +443,24 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing gateway contract.",
-             "Pausing gateway contract.",
-             AlertLevel::Info,
-        ).await;
+            "Pausing gateway contract.",
+            "Pausing gateway contract.",
+            AlertLevel::Info,
+        )
+        .await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused gateway contract.",
             "Successfully paused gateway contract.",
             AlertLevel::Info,
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_handle_pause_portal_action() {
-        let (
-            action_sender,
-            action_receiver,
-        ) = mpsc::unbounded_channel::<ActionParams>();
-        let (
-            alert_sender,
-            mut alert_receiver,
-        ) = mpsc::unbounded_channel::<AlertParams>();
+        let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
+        let (alert_sender, mut alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
 
         let mut mock_state_contract: MockStateContractTrait = MockStateContractTrait::new();
         let mut mock_portal_contract: MockPortalContractTrait = MockPortalContractTrait::new();
@@ -488,10 +468,11 @@ mod tests {
 
         // Mock the behavior of the pause function
         mock_state_contract.expect_pause().times(0);
-        mock_portal_contract.expect_pause()
-            .times(1) 
+        mock_portal_contract
+            .expect_pause()
+            .times(1)
             .returning(|| Box::pin(async { Ok(()) }));
-        mock_gateway_contract.expect_pause().times(0); 
+        mock_gateway_contract.expect_pause().times(0);
 
         let actions = WatchtowerEthereumActions {
             action_sender: action_sender.clone(),
@@ -508,40 +489,40 @@ mod tests {
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing portal contract.",
-             "Pausing portal contract.",
-             AlertLevel::Info,
-        ).await;
+            "Pausing portal contract.",
+            "Pausing portal contract.",
+            AlertLevel::Info,
+        )
+        .await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused portal contract.",
             "Successfully paused portal contract.",
             AlertLevel::Info,
-        ).await;
+        )
+        .await;
     }
 
     #[tokio::test]
     async fn test_handle_pause_all_action() {
-        let (
-            action_sender,
-            action_receiver,
-        ) = mpsc::unbounded_channel::<ActionParams>();
-        let (
-            alert_sender,
-            mut alert_receiver,) = mpsc::unbounded_channel::<AlertParams>();
+        let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
+        let (alert_sender, mut alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
 
         let mut mock_state_contract = MockStateContractTrait::new();
         let mut mock_portal_contract = MockPortalContractTrait::new();
         let mut mock_gateway_contract = MockGatewayContractTrait::new();
 
         // Mock the behavior of the pause function for all contracts
-        mock_state_contract.expect_pause()
+        mock_state_contract
+            .expect_pause()
             .times(1)
             .returning(|| Box::pin(async { Ok(()) }));
-        mock_portal_contract.expect_pause()
+        mock_portal_contract
+            .expect_pause()
             .times(1)
             .returning(|| Box::pin(async { Ok(()) }));
-        mock_gateway_contract.expect_pause()
+        mock_gateway_contract
+            .expect_pause()
             .times(1)
             .returning(|| Box::pin(async { Ok(()) }));
 
@@ -562,41 +543,47 @@ mod tests {
         // Verify alerts for pausing each contract
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing state contract.",
-             "Pausing state contract.",
-             AlertLevel::Info,
-        ).await;
+            "Pausing state contract.",
+            "Pausing state contract.",
+            AlertLevel::Info,
+        )
+        .await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused state contract.",
             "Successfully paused state contract.",
             AlertLevel::Info,
-        ).await;
+        )
+        .await;
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing gateway contract.",
-             "Pausing gateway contract.",
-             AlertLevel::Info,
-        ).await;
+            "Pausing gateway contract.",
+            "Pausing gateway contract.",
+            AlertLevel::Info,
+        )
+        .await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused gateway contract.",
             "Successfully paused gateway contract.",
             AlertLevel::Info,
-        ).await;
+        )
+        .await;
 
         assert_alert_received(
             &mut alert_receiver,
-             "Pausing portal contract.",
-             "Pausing portal contract.",
-             AlertLevel::Info,
-        ).await;
+            "Pausing portal contract.",
+            "Pausing portal contract.",
+            AlertLevel::Info,
+        )
+        .await;
         assert_alert_received(
             &mut alert_receiver,
             "Successfully paused portal contract.",
             "Successfully paused portal contract.",
             AlertLevel::Info,
-        ).await;
+        )
+        .await;
     }
 }

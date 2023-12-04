@@ -102,4 +102,3 @@ impl ClientExt for FuelClient {
         Ok(blocks)
     }
 }
-

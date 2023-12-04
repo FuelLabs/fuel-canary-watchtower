@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use fuel_core_client::client::FuelClient;
+use std::sync::Arc;
 
 pub async fn setup_fuel_provider(fuels_graphql: &str) -> Result<Arc<FuelClient>> {
     let provider = FuelClient::new(fuels_graphql).unwrap();

@@ -1,12 +1,12 @@
 use super::ETHEREUM_CONNECTION_RETRIES;
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use ethers::providers::Middleware;
 use ethers::types::Address;
 
 use std::str::FromStr;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 
@@ -16,7 +16,7 @@ pub use ethers::types::U256;
 use mockall::{automock, predicate::*};
 
 #[async_trait]
-#[cfg_attr(test, automock)] 
+#[cfg_attr(test, automock)]
 pub trait EthereumChainTrait: Send + Sync {
     async fn check_connection(&self) -> Result<()>;
     async fn get_seconds_since_last_block(&self) -> Result<u32>;
@@ -25,18 +25,18 @@ pub trait EthereumChainTrait: Send + Sync {
 }
 
 #[derive(Clone, Debug)]
-pub struct EthereumChain<P: Middleware>{
+pub struct EthereumChain<P: Middleware> {
     provider: Arc<P>,
 }
 
-impl <P: Middleware + 'static>EthereumChain<P> {
+impl<P: Middleware + 'static> EthereumChain<P> {
     pub async fn new(provider: Arc<P>) -> Result<Self> {
         Ok(EthereumChain { provider })
     }
 }
 
 #[async_trait]
-impl <P: Middleware + 'static> EthereumChainTrait for EthereumChain<P> {
+impl<P: Middleware + 'static> EthereumChainTrait for EthereumChain<P> {
     async fn check_connection(&self) -> Result<()> {
         for _ in 0..ETHEREUM_CONNECTION_RETRIES {
             if self.provider.get_chainid().await.is_ok() {
@@ -44,8 +44,9 @@ impl <P: Middleware + 'static> EthereumChainTrait for EthereumChain<P> {
             }
         }
         Err(anyhow::anyhow!(
-            "Failed to establish connection after {} retries", ETHEREUM_CONNECTION_RETRIES),
-        )
+            "Failed to establish connection after {} retries",
+            ETHEREUM_CONNECTION_RETRIES
+        ))
     }
 
     async fn get_seconds_since_last_block(&self) -> Result<u32> {
@@ -53,26 +54,21 @@ impl <P: Middleware + 'static> EthereumChainTrait for EthereumChain<P> {
         let mut block_option = None;
 
         for _ in 0..ETHEREUM_CONNECTION_RETRIES {
-            if let Ok(block) = self.provider.get_block(
-                block_num,
-            ).await {
+            if let Ok(block) = self.provider.get_block(block_num).await {
                 block_option = block;
                 break;
             }
         }
 
-        let block = block_option.ok_or_else(|| anyhow!(
-            "Failed to get block after {} retries", ETHEREUM_CONNECTION_RETRIES),
-        )?;
+        let block =
+            block_option.ok_or_else(|| anyhow!("Failed to get block after {} retries", ETHEREUM_CONNECTION_RETRIES))?;
 
         let last_block_timestamp = block.timestamp.as_u64();
-        let millis_now = (
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64
-        ) / 1000;
+        let millis_now = (SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64) / 1000;
 
         if millis_now >= last_block_timestamp {
             Ok((millis_now - last_block_timestamp) as u32)
-        }else{
+        } else {
             Err(anyhow!("Block time is ahead of current time"))
         }
     }
@@ -84,31 +80,29 @@ impl <P: Middleware + 'static> EthereumChainTrait for EthereumChain<P> {
             }
         }
         Err(anyhow::anyhow!(
-            "Failed to retrieve block number after {} retries", ETHEREUM_CONNECTION_RETRIES),
-        )
+            "Failed to retrieve block number after {} retries",
+            ETHEREUM_CONNECTION_RETRIES
+        ))
     }
 
     async fn get_account_balance(&self, addr: &str) -> Result<U256> {
         for _i in 0..ETHEREUM_CONNECTION_RETRIES {
-            if let Ok(balance) = self.provider.get_balance(
-                Address::from_str(addr)?,
-                None,
-            ).await {
+            if let Ok(balance) = self.provider.get_balance(Address::from_str(addr)?, None).await {
                 return Ok(balance);
             }
         }
         Err(anyhow::anyhow!(
-            "Failed to retrieve balance after {} retries", ETHEREUM_CONNECTION_RETRIES),
-        )
+            "Failed to retrieve balance after {} retries",
+            ETHEREUM_CONNECTION_RETRIES
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethers::providers::{MockProvider, Provider, MockResponse};
+    use ethers::providers::{MockProvider, MockResponse, Provider};
     use ethers::types::{Block, U64};
-
 
     async fn setup_mock_provider() -> (MockProvider, EthereumChain<Provider<MockProvider>>) {
         let mock = MockProvider::new();
@@ -137,12 +131,15 @@ mod tests {
         let (mock, chain) = setup_mock_provider().await;
         let latest_block_number = U64::from(100);
         let past_timestamp = U256::from(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 10);
-        
-        mock.push_response(MockResponse::Value(serde_json::to_value(&Block::<()> {
-            number: Some(latest_block_number),
-            timestamp: past_timestamp,
-            ..Default::default()
-        }).unwrap()));
+
+        mock.push_response(MockResponse::Value(
+            serde_json::to_value(&Block::<()> {
+                number: Some(latest_block_number),
+                timestamp: past_timestamp,
+                ..Default::default()
+            })
+            .unwrap(),
+        ));
 
         mock.push_response(MockResponse::Value(serde_json::json!(latest_block_number)));
 
@@ -150,7 +147,7 @@ mod tests {
         assert!(seconds_since_last_block.is_ok());
         assert_eq!(seconds_since_last_block.unwrap(), 10);
     }
-    
+
     #[tokio::test]
     async fn test_get_latest_block_number() {
         let (mock, chain) = setup_mock_provider().await;
@@ -166,7 +163,7 @@ mod tests {
         let (mock, chain) = setup_mock_provider().await;
         let addr = "0x0000000000000000000000000000000000000000";
         let balance = U256::from(1000);
-        
+
         mock.push_response(MockResponse::Value(serde_json::to_value(balance).unwrap()));
 
         let result = chain.get_account_balance(addr).await;

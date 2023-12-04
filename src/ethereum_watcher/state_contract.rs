@@ -1,5 +1,4 @@
-use super::{ETHEREUM_CONNECTION_RETRIES, ethereum_utils};
-
+use super::{ethereum_utils, ETHEREUM_CONNECTION_RETRIES};
 
 use anyhow::Result;
 use ethers::abi::Address;
@@ -21,7 +20,7 @@ use mockall::{automock, predicate::*};
 abigen!(FuelChainState, "./abi/FuelChainState.json");
 
 #[async_trait]
-#[cfg_attr(test, automock)] 
+#[cfg_attr(test, automock)]
 pub trait StateContractTrait: Send + Sync {
     async fn initialize(&mut self) -> Result<()>;
     async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>>;
@@ -29,9 +28,9 @@ pub trait StateContractTrait: Send + Sync {
 }
 
 #[derive(Clone, Debug)]
-pub struct StateContract<P: Middleware>{
+pub struct StateContract<P: Middleware> {
     provider: Arc<P>,
-    wallet:  Wallet<SigningKey>,
+    wallet: Wallet<SigningKey>,
     contract: Option<FuelChainState<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>>,
     address: H160,
     read_only: bool,
@@ -57,16 +56,11 @@ impl<P: Middleware + 'static> StateContract<P> {
 }
 
 #[async_trait]
-impl <P: Middleware + 'static> StateContractTrait for StateContract<P>{   
+impl<P: Middleware + 'static> StateContractTrait for StateContract<P> {
     async fn initialize(&mut self) -> Result<()> {
-        let client = SignerMiddleware::new(
-            self.provider.clone(),
-             self.wallet.clone(),
-            );
+        let client = SignerMiddleware::new(self.provider.clone(), self.wallet.clone());
 
-        let contract = FuelChainState::new(
-            self.address, Arc::new(client),
-        );
+        let contract = FuelChainState::new(self.address, Arc::new(client));
 
         // Try calling a read function to check if the contract is valid
         match contract.paused().call().await {
@@ -111,9 +105,9 @@ impl <P: Middleware + 'static> StateContractTrait for StateContract<P>{
                     match result {
                         Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
                         Ok(res) => {
-                            println!("Pausing state contract at tx {:?}",res);
+                            println!("Pausing state contract at tx {:?}", res);
                             Ok(())
-                        },
+                        }
                     }
                 } else {
                     Err(anyhow::anyhow!("State Contract is already paused or invalid"))
@@ -124,50 +118,34 @@ impl <P: Middleware + 'static> StateContractTrait for StateContract<P>{
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use ethers::prelude::*;
     use crate::{
-        test_utils::test_utils::{setup_state_contract, setup_wallet_and_provider},
         ethereum_watcher::state_contract::StateContractTrait,
+        test_utils::test_utils::{setup_state_contract, setup_wallet_and_provider},
     };
+    use ethers::prelude::*;
 
     #[tokio::test]
     async fn new_state_contract_test() {
-        let (
-            provider,
-            mock,
-            wallet,
-        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
-        let state_contract = setup_state_contract(
-            provider,
-            mock,
-            wallet,
-        ).expect("Setup failed");
+        let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let state_contract = setup_state_contract(provider, mock, wallet).expect("Setup failed");
 
         assert!(!state_contract.read_only);
-        assert_eq!(state_contract.address, "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap());
+        assert_eq!(
+            state_contract.address,
+            "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap()
+        );
     }
 
     #[tokio::test]
     async fn initialize_state_contract_test() {
-        let (
-            provider,
-            mock,
-            wallet,
-        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
-        let mut state_contract = setup_state_contract(
-            provider,
-            mock.clone(),
-            wallet,
-        ).expect("Setup failed");
+        let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let mut state_contract = setup_state_contract(provider, mock.clone(), wallet).expect("Setup failed");
 
         // Mock a successful response for the `paused` call
         let paused_response_hex: String = format!("0x{}", "00".repeat(32));
-        mock.push_response(
-            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
-        );
+        mock.push_response(MockResponse::Value(serde_json::Value::String(paused_response_hex)));
 
         let result = state_contract.initialize().await;
         assert!(result.is_ok());
@@ -176,19 +154,15 @@ mod tests {
 
     #[tokio::test]
     async fn get_latest_commits_test() {
-        let (
-            provider,
-            mock,
-            wallet,
-        ) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
-        let state_contract = setup_state_contract(
-            provider,
-            mock.clone(),
-            wallet,
-        ).expect("Setup failed");
+        let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let state_contract = setup_state_contract(provider, mock.clone(), wallet).expect("Setup failed");
 
-        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
-        let expected_commit:Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
+        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        let expected_commit: Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede"
+            .parse()
+            .unwrap();
         let log_entry = Log {
             address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
             topics: vec![empty_data],

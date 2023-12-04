@@ -1,23 +1,20 @@
-use super::{FUEL_BLOCK_TIME, FUEL_CONNECTION_RETRIES, extended_provider::ClientExt};
+use super::{extended_provider::ClientExt, FUEL_BLOCK_TIME, FUEL_CONNECTION_RETRIES};
 
 use anyhow::Result;
+use fuel_core_client::client::{
+    schema::tx::{transparent_receipt::ReceiptType, OpaqueTransaction, TransactionStatus},
+    types::ChainInfo,
+    FuelClient,
+};
 use fuels::{
     client::{PageDirection, PaginationRequest},
-    types::{Identity, Bits256},
     core::{
         codec::ABIDecoder,
         traits::{Parameterize, Tokenizable},
     },
     macros::{Parameterize, Tokenizable},
     tx::Bytes32,
-};
-use fuel_core_client::client::{
-    FuelClient,
-    types::ChainInfo,
-    schema::tx::{
-            OpaqueTransaction, TransactionStatus,
-            transparent_receipt::ReceiptType,
-        },
+    types::{Bits256, Identity},
 };
 
 use async_trait::async_trait;
@@ -36,7 +33,7 @@ pub struct WithdrawalEvent {
 }
 
 #[async_trait]
-#[cfg_attr(test, automock)] 
+#[cfg_attr(test, automock)]
 pub trait FuelChainTrait: Send + Sync {
     async fn check_connection(&self) -> Result<()>;
     async fn get_seconds_since_last_block(&self) -> Result<u32>;
@@ -55,7 +52,7 @@ pub struct FuelChain {
 
 impl FuelChain {
     pub fn new(provider: Arc<FuelClient>) -> Result<Self> {
-        Ok(FuelChain {provider })
+        Ok(FuelChain { provider })
     }
 }
 
@@ -68,21 +65,20 @@ impl FuelChainTrait for FuelChain {
             }
         }
         Err(anyhow::anyhow!(
-            "Failed to establish connection after {} retries", FUEL_CONNECTION_RETRIES),
-        )
+            "Failed to establish connection after {} retries",
+            FUEL_CONNECTION_RETRIES
+        ))
     }
 
     async fn get_seconds_since_last_block(&self) -> Result<u32> {
         let chain_info = self.fetch_chain_info().await?;
-    
+
         // Assuming `latest_block_time` is of type `Tai64` and is always present.
         let latest_block_time = chain_info.latest_block.header.time;
         let last_block_timestamp = latest_block_time.to_unix() as u64;
-    
-        let current_timestamp = SystemTime::now().duration_since(
-            UNIX_EPOCH,
-        )?.as_secs();
-    
+
+        let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+
         if current_timestamp < last_block_timestamp {
             return Err(anyhow::anyhow!("Block time is ahead of current time"));
         }
@@ -98,12 +94,12 @@ impl FuelChainTrait for FuelChain {
             }
         }
         Err(anyhow::anyhow!(
-            "Failed to establish connection after {} retries", FUEL_CONNECTION_RETRIES),
-        )
+            "Failed to establish connection after {} retries",
+            FUEL_CONNECTION_RETRIES
+        ))
     }
 
     async fn get_base_amount_withdrawn(&self, timeframe: u32) -> Result<u64> {
-        
         let adjusted_timeframe = timeframe / FUEL_BLOCK_TIME as u32;
         let num_blocks = usize::try_from(adjusted_timeframe).map_err(|e| anyhow::anyhow!("{e}"))?;
 
@@ -138,9 +134,8 @@ impl FuelChainTrait for FuelChain {
     }
 
     async fn get_base_amount_withdrawn_from_tx(&self, tx: &OpaqueTransaction) -> Result<u64> {
-
         // Process the transaction from the chain within a certain number of tries.
-        let mut total_amount:u64 = 0;
+        let mut total_amount: u64 = 0;
 
         // Check if there is a status assigned.
         let status = match &tx.status {
@@ -159,25 +154,21 @@ impl FuelChainTrait for FuelChain {
             None => return Ok(0),
         };
 
-
         // Fetch the receipts from the transaction.
-        for receipt in receipts{
+        for receipt in receipts {
             if let ReceiptType::MessageOut = receipt.receipt_type {
                 let amount = match &receipt.amount {
                     Some(amount) => amount.0,
                     None => 0,
                 };
-                total_amount +=amount;
+                total_amount += amount;
             }
         }
 
         Ok(total_amount)
     }
 
-    async fn get_token_amount_withdrawn(
-        &self, timeframe: u32, token_contract_id: &str
-    ) -> Result<u64> {
-    
+    async fn get_token_amount_withdrawn(&self, timeframe: u32, token_contract_id: &str) -> Result<u64> {
         let adjusted_timeframe = timeframe / FUEL_BLOCK_TIME as u32;
         let num_blocks = usize::try_from(adjusted_timeframe).map_err(|e| anyhow::anyhow!("{e}"))?;
 
@@ -194,8 +185,7 @@ impl FuelChainTrait for FuelChain {
                     for block in blocks_result.results {
                         let mut block_total = 0;
                         for tx in block.transactions {
-                            match self.get_token_amount_withdrawn_from_tx(
-                                &tx, token_contract_id).await {
+                            match self.get_token_amount_withdrawn_from_tx(&tx, token_contract_id).await {
                                 Ok(amount) => block_total += amount,
                                 Err(e) => return Err(anyhow::anyhow!("{e}")),
                             }
@@ -208,16 +198,13 @@ impl FuelChainTrait for FuelChain {
                 Err(_) => continue,
             }
         }
-    
+
         Ok(total_from_blocks)
     }
 
-    async fn get_token_amount_withdrawn_from_tx(
-        &self, tx: &OpaqueTransaction, token_contract_id: &str,
-    ) -> Result<u64> {
-
+    async fn get_token_amount_withdrawn_from_tx(&self, tx: &OpaqueTransaction, token_contract_id: &str) -> Result<u64> {
         // Query the transaction from the chain within a certain number of tries.
-        let mut total_amount:u64 = 0;
+        let mut total_amount: u64 = 0;
 
         // Check if there is a status assigned.
         let status = match &tx.status {
@@ -238,14 +225,14 @@ impl FuelChainTrait for FuelChain {
 
         // Fetch the receipts from the transaction.
         let mut burn_found: bool = false;
-        for receipt in receipts{
+        for receipt in receipts {
             if let ReceiptType::Burn = receipt.receipt_type {
                 // Skip this receipt if contract is None
                 let contract_id = match &receipt.contract {
                     Some(contract) => contract.id.to_string(),
                     None => continue,
                 };
-        
+
                 // Set burn_found to true if the contract_id matches token_contract_id
                 if contract_id == token_contract_id {
                     burn_found = true;
@@ -257,7 +244,7 @@ impl FuelChainTrait for FuelChain {
                 if !burn_found {
                     continue;
                 }
-                
+
                 // Skip this receipt if contract is None
                 let contract_id = match &receipt.contract {
                     Some(contract) => contract.id.to_string(),
@@ -274,11 +261,8 @@ impl FuelChainTrait for FuelChain {
                     Some(data) => data,
                     None => continue,
                 };
-                        
-                let token = ABIDecoder::default().decode(
-                    &WithdrawalEvent::param_type(),
-                    data,
-                )?;
+
+                let token = ABIDecoder::default().decode(&WithdrawalEvent::param_type(), data)?;
 
                 let withdrawal_event: WithdrawalEvent = WithdrawalEvent::from_token(token)?;
                 total_amount += withdrawal_event.amount;
