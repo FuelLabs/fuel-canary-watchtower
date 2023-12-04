@@ -522,8 +522,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_pause_all_action() {
-        let (action_sender, action_receiver) = mpsc::unbounded_channel::<ActionParams>();
-        let (alert_sender, mut alert_receiver) = mpsc::unbounded_channel::<AlertParams>();
+        let (
+            action_sender,
+            action_receiver,
+        ) = mpsc::unbounded_channel::<ActionParams>();
+        let (
+            alert_sender,
+            mut alert_receiver,) = mpsc::unbounded_channel::<AlertParams>();
 
         let mut mock_state_contract = MockStateContractTrait::new();
         let mut mock_portal_contract = MockPortalContractTrait::new();

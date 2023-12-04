@@ -261,3 +261,59 @@ pub async fn start_fuel_watcher(
 
     Ok(handle)
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    use crate::{
+        ethereum_watcher::{
+            ethereum_chain::MockEthereumChainTrait,
+            state_contract::MockStateContractTrait,
+            portal_contract::MockPortalContractTrait,
+            gateway_contract::MockGatewayContractTrait,
+        },
+        ethereum_actions::EthereumAction,
+        config::*, fuel_watcher::fuel_chain::MockFuelChainTrait,
+    };
+    use ethers::types::U256;
+    use fuels::tx::Bytes32;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    #[tokio::test]
+    async fn test_check_fuel_chain_connection_failure() {
+        let mut mock_fuel_chain = MockFuelChainTrait::new();
+        let (
+            action_sender,
+            mut action_receiver,
+        ) = unbounded_channel();
+        let (
+            alert_sender,
+            mut alert_receiver,
+        ) = unbounded_channel();
+
+        let watch_config = FuelClientWatcher {
+            connection_alert: GenericAlert {
+                alert_level: AlertLevel::Error,
+                alert_action: EthereumAction::None,
+            },
+            ..Default::default()
+        };
+    
+        // Simulate a connection failure
+        mock_fuel_chain
+            .expect_check_connection()
+            .times(1)
+            .returning(|| Box::pin(async { Err(anyhow::anyhow!("Connection error")) }));
+        
+        let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
+        check_fuel_chain_connection(&fuel_chain, action_sender, alert_sender, &watch_config).await;
+    
+        // Assert alert was sent
+        assert!(alert_receiver.try_recv().is_ok());
+    
+        // Assert action was sent
+        assert!(action_receiver.try_recv().is_ok());
+    }    
+}
