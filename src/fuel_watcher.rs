@@ -78,10 +78,10 @@ async fn check_fuel_block_production(
         send_alert(
             &alert_sender,
             format!(
-                "Fuel Chain: block is taking longer than {}seconds",
+                "Fuel Chain: block is taking longer than {} seconds",
                 watch_config.block_production_alert.max_block_time
             ),
-            format!("Last block was {}seconds ago.", seconds_since_last_block),
+            format!("Last block was {} seconds ago.", seconds_since_last_block),
             watch_config.block_production_alert.alert_level.clone(),
         );
         send_action(
@@ -139,7 +139,7 @@ async fn check_fuel_base_asset_withdrawals(
             send_alert(
                 &alert_sender,
                 format!(
-                    "Fuel Chain: {} is above withdrawal threshold {}{} for a period of {}seconds",
+                    "Fuel Chain: {} is above withdrawal threshold {}{} for a period of {} seconds",
                     portal_withdrawal_alert.token_name,
                     dec_amt_threshold,
                     portal_withdrawal_alert.token_name,
@@ -293,8 +293,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check fuel connection"));
-            assert!(alert.is_description_equal("Failed to check fuel connection: Connection error"));
+            assert!(alert.is_name_equal("Fuel Chain: Failed to check connection"));
+            assert!(alert.is_description_equal("Error: Connection error"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -434,8 +434,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check fuel block production"));
-            assert!(alert.is_description_equal("Failed to check fuel block production: Error fetching block time"));
+            assert!(alert.is_name_equal("Fuel Chain: Failed to check get latest block"));
+            assert!(alert.is_description_equal("Error: Error fetching block time"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -477,10 +477,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Fuel block is taking long"));
-            assert!(alert.is_description_equal(
-                "Next fuel block is taking longer than 60 seconds. Last block was 70 seconds ago."
-            ));
+            assert!(alert.is_name_equal("Fuel Chain: block is taking longer than 60 seconds"));
+            assert!(alert.is_description_equal("Last block was 70 seconds ago."));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -561,10 +559,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check fuel chain for base asset withdrawals"));
-            assert!(
-                alert.is_description_equal("Failed to check base asset withdrawals: Error fetching withdrawal amount")
-            );
+            assert!(alert.is_name_equal("Fuel Chain: Failed to check fuel chain for base asset ETH withdrawals"));
+            assert!(alert.is_description_equal("Error: Error fetching withdrawal amount"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -694,8 +690,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check fuel chain for ERC20 USDC withdrawals at address 0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"));
-            assert!(alert.is_description_equal("Failed to check ERC20 withdrawals: Error fetching withdrawal amount"));
+            assert!(alert.is_name_equal("Fuel Chain: Failed to check fuel chain for ERC20 USDC withdrawals at address 0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"));
+            assert!(alert.is_description_equal("Error: Error fetching withdrawal amount"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");

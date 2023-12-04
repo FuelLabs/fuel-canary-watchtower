@@ -88,10 +88,10 @@ async fn check_eth_block_production(
         send_alert(
             &alert_sender,
             format!(
-                "Ethereum Chain: block is taking longer than {}seconds",
+                "Ethereum Chain: block is taking longer than {} seconds",
                 watch_config.block_production_alert.max_block_time,
             ),
-            format!("Last block was {}seconds ago.", seconds_since_last_block),
+            format!("Last block was {} seconds ago.", seconds_since_last_block),
             watch_config.block_production_alert.alert_level.clone(),
         );
         send_action(
@@ -341,7 +341,7 @@ async fn check_eth_base_asset_withdrawals(
             send_alert(
                 &alert_sender,
                 format!(
-                    "Ethereum Chain: {} is above withdrawal threshold {}{} for a period of {}seconds",
+                    "Ethereum Chain: {} is above withdrawal threshold {}{} for a period of {} seconds",
                     portal_withdrawal_alert.token_name,
                     dec_amt_threshold,
                     portal_withdrawal_alert.token_name,
@@ -730,8 +730,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check ethereum connection"));
-            assert!(alert.is_description_equal("Failed to check ethereum connection: connection failed"));
+            assert!(alert.is_name_equal("Ethereum Chain: Failed to check connection"));
+            assert!(alert.is_description_equal("Error: connection failed"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -763,7 +763,7 @@ mod tests {
             block_production_alert: BlockProductionAlert {
                 alert_level: AlertLevel::Warn,
                 alert_action: EthereumAction::None,
-                max_block_time: 20, // 20 seconds time limit
+                max_block_time: 20,
             },
             ..Default::default()
         };
@@ -799,7 +799,7 @@ mod tests {
             block_production_alert: BlockProductionAlert {
                 alert_level: AlertLevel::Warn,
                 alert_action: EthereumAction::None,
-                max_block_time: 20, // 20 seconds time limit
+                max_block_time: 20,
             },
             ..Default::default()
         };
@@ -809,10 +809,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum block is taking long"));
-            assert!(alert.is_description_equal(
-                "Next ethereum block is taking longer than 20 seconds. Last block was 25 seconds ago."
-            ));
+            assert!(alert.is_name_equal("Ethereum Chain: block is taking longer than 20 seconds"));
+            assert!(alert.is_description_equal("Last block was 25 seconds ago."));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -854,8 +852,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check ethereum block"));
-            assert!(alert.is_description_equal("Failed to check ethereum block production: Failed to get block time"));
+            assert!(alert.is_name_equal("Ethereum Chain: Failed to check get latest block"));
+            assert!(alert.is_description_equal("Error: Failed to get block time"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -984,8 +982,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum account low on funds"));
-            assert!(alert.is_description_equal("Ethereum account (0x123) is low on funds. Current balance: 500"));
+            assert!(alert.is_name_equal("Ethereum Chain: Ethereum account 0x123 is low on funds"));
+            assert!(alert.is_description_equal("Current balance: 500"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -1183,8 +1181,8 @@ mod tests {
 
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Invalid commit was made on the state contract"));
-            assert!(alert.is_description_equal("An invalid commit was made on the state contract. Hash: c84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede"));
+            assert!(alert.is_name_equal("Ethereum Chain: Invalid commit was made on the state contract"));
+            assert!(alert.is_description_equal("Block Hash: c84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede not found on the fuel chain"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert was not sent");
@@ -1318,8 +1316,8 @@ mod tests {
 
         // Assert that an alert was sent due to the error in fetching commits
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check state contract"));
-            assert!(alert.is_description_equal("Failed to check state contract commits: Error fetching commits"));
+            assert!(alert.is_name_equal("Ethereum Chain: Failed to check state contract"));
+            assert!(alert.is_description_equal("Error: Error fetching commits"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for state contract error was not sent");
@@ -1469,8 +1467,8 @@ mod tests {
 
         // Assertions to ensure alert and action are triggered
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Base asset is above deposit threshold"));
-            assert!(alert.is_description_equal("Base asset deposit threshold of 100000000000000000000 over 60 seconds has been reached. Amount deposited: 150000000000000000000"));
+            assert!(alert.is_name_equal("Ethereum Chain: ETH is above deposit threshold 100ETH for a period of 60 seconds"));
+            assert!(alert.is_description_equal("Amount deposited: 150ETH"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for portal contract error was not sent");
@@ -1531,8 +1529,8 @@ mod tests {
 
         // Assertions to ensure alert and action are triggered due to error
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check portal contract for base asset deposits"));
-            assert!(alert.is_description_equal("Failed to check base asset deposits: mock error"));
+            assert!(alert.is_name_equal("Ethereum Chain: Failed to check portal contract for ETH deposits"));
+            assert!(alert.is_description_equal("Error: mock error"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for failed deposit check was not sent");
@@ -1652,8 +1650,8 @@ mod tests {
 
         // Assertions to ensure alert and action are triggered
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Base asset is above withdrawal threshold"));
-            assert!(alert.is_description_equal("Base asset withdrawal threshold of 100000000000000000000 over 60 seconds has been exceeded. Amount withdrawn: 150000000000000000000"));
+            assert!(alert.is_name_equal("Ethereum Chain: ETH is above withdrawal threshold 100ETH for a period of 60 seconds"));
+            assert!(alert.is_description_equal("Amount withdrawn: 150ETH"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for failed deposit check was not sent");
@@ -1714,8 +1712,8 @@ mod tests {
 
         // Assertions to ensure alert and action are triggered due to error
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Failed to check portal contract for base asset withdrawals"));
-            assert!(alert.is_description_equal("Failed to check base asset withdrawals: mock error"));
+            assert!(alert.is_name_equal("Ethereum Chain: Failed to check portal contract for ETH withdrawals"));
+            assert!(alert.is_description_equal("Error: mock error"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for failed withdrawals check was not sent");
@@ -1834,8 +1832,8 @@ mod tests {
 
         // Assertions to ensure alert and action are triggered
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: ERC20 USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above deposit threshold"));
-            assert!(alert.is_description_equal("ERC20 deposit threshold of 100000000000000000000USDC over 60 seconds has been reached. Amount deposited: 150000000000000000000USDC"));
+            assert!(alert.is_name_equal("Ethereum Chain: USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above deposit threshold 100USDC for a period of 60 seconds"));
+            assert!(alert.is_description_equal("Amount deposited: 150USDC"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for gateway contract error was not sent");
@@ -1938,10 +1936,8 @@ mod tests {
 
         // Assertions to ensure alert and action are triggered due to error
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal(
-                "Failed to check ERC20 deposits USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-            ));
-            assert!(alert.is_description_equal("Failed to check ERC20 deposits: mock error"));
+            assert!(alert.is_name_equal("Ethereum Chain: Failed to check gateway contract for USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
+            assert!(alert.is_description_equal("Error: mock error"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for gateway contract error was not sent");
@@ -2025,8 +2021,8 @@ mod tests {
 
         // Assertions to ensure alert and action are triggered
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: ERC20 USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above withdrawal threshold"));
-            assert!(alert.is_description_equal("ERC20 withdrawal threshold of 100000000000000000000USDC over 60 seconds has been reached. Amount withdrawn: 150000000000000000000USDC"));
+            assert!(alert.is_name_equal("Ethereum Chain: USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above withdrawal threshold 100USDC for a period of 60 seconds"));
+            assert!(alert.is_description_equal("Amount withdrawn: 150USDC"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for gateway contract error was not sent");
@@ -2130,9 +2126,8 @@ mod tests {
 
         // Assertions to ensure alert and action are triggered due to error
         if let Ok(alert) = alert_receiver.try_recv() {
-            println!("{:?}", alert);
-            assert!(alert.is_name_equal("Ethereum Chain: Failed to check ERC20 withdrawals USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
-            assert!(alert.is_description_equal("Failed to check ERC20 withdrawals: mock error"));
+            assert!(alert.is_name_equal("Ethereum Chain: Failed to check gateway contract for USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
+            assert!(alert.is_description_equal("Error: mock error"));
             assert!(alert.is_level_equal(AlertLevel::Warn));
         } else {
             panic!("Alert for failed withdrawal check was not sent");
