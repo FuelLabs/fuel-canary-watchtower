@@ -1,7 +1,7 @@
 use crate::alerter::{AlertLevel, AlertParams, send_alert};
 use crate::ethereum_actions::{ActionParams, send_action};
 use crate::WatchtowerConfig;
-use crate::config::FuelClientWatcher;
+use crate::config::{FuelClientWatcher, convert_to_decimal_u64};
 use crate::fuel_watcher::fuel_utils::get_value;
 
 use anyhow::Result;
@@ -34,8 +34,8 @@ async fn check_fuel_chain_connection(
     if let Err(e) = fuel_chain.check_connection().await {
         send_alert(
             &alert_sender,
-            String::from("Failed to check fuel connection"),
-            format!("Failed to check fuel connection: {}", e),
+            String::from("Fuel Chain: Failed to check connection"),
+            format!("Error: {}", e),
             watch_config.connection_alert.alert_level.clone(),
         );
         send_action(
@@ -61,8 +61,8 @@ async fn check_fuel_block_production(
         Err(e) => {
             send_alert(
                 &alert_sender,
-                String::from("Failed to check fuel block production"),
-                format!("Failed to check fuel block production: {}", e),
+                String::from("Fuel Chain: Failed to check get latest block"),
+                format!("Error: {}", e),
                 watch_config.block_production_alert.alert_level.clone(),
             );
             send_action(
@@ -77,11 +77,9 @@ async fn check_fuel_block_production(
     if seconds_since_last_block > watch_config.block_production_alert.max_block_time {
         send_alert(
             &alert_sender,
-            String::from("Fuel block is taking long"),
-            format!(
-                "Next fuel block is taking longer than {} seconds. Last block was {} seconds ago.",
-                watch_config.block_production_alert.max_block_time, seconds_since_last_block
-            ),
+            format!("Fuel Chain: block is taking longer than {}seconds",
+                         watch_config.block_production_alert.max_block_time),
+                format!("Last block was {}seconds ago.", seconds_since_last_block),
             watch_config.block_production_alert.alert_level.clone(),
         );
         send_action(
@@ -98,54 +96,60 @@ async fn check_fuel_base_asset_withdrawals(
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &FuelClientWatcher,
 ) {
-    for portal_withdraw_alert in &watch_config.portal_withdraw_alerts {
-        if portal_withdraw_alert.alert_level == AlertLevel::None {
+    for portal_withdrawal_alert in &watch_config.portal_withdrawal_alerts {
+        if portal_withdrawal_alert.alert_level == AlertLevel::None {
             continue;
         }
-        let time_frame = portal_withdraw_alert.time_frame;
+        let time_frame = portal_withdrawal_alert.time_frame;
         let amount = match fuel_chain.get_base_amount_withdrawn(time_frame).await {
             Ok(amt) => {
-                println!(
-                    "Fuel Chain: Total Base Asset Withdrawn {} for time frame {}",
-                    amt,
-                    time_frame,
+                let formatted_amt = convert_to_decimal_u64(amt, portal_withdrawal_alert.token_decimals);
+                println!("Fuel Chain: {}{} withdrawn over a period of {} seconds",
+                    formatted_amt, portal_withdrawal_alert.token_name, time_frame,
                 );
                 amt
             },
             Err(e) => {
                 send_alert(
                     &alert_sender,
-                    String::from("Failed to check fuel chain for base asset withdrawals"),
-                    format!("Failed to check base asset withdrawals: {}", e),
-                    portal_withdraw_alert.alert_level.clone(),
+                    format!("Fuel Chain: Failed to check fuel chain for base asset {} withdrawals",
+                            portal_withdrawal_alert.token_name),
+                    format!("Error: {}", e),
+                    portal_withdrawal_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    portal_withdraw_alert.alert_action.clone(),
-                    Some(portal_withdraw_alert.alert_level.clone()),
+                    portal_withdrawal_alert.alert_action.clone(),
+                    Some(portal_withdrawal_alert.alert_level.clone()),
                 );
                 continue;
             }
         };
 
         let amount_threshold = get_value(
-            portal_withdraw_alert.amount,
-            portal_withdraw_alert.token_decimals,
+            portal_withdrawal_alert.amount,
+            portal_withdrawal_alert.token_decimals,
         );
         if amount >= amount_threshold {
+            let dec_amt = convert_to_decimal_u64(amount, portal_withdrawal_alert.token_decimals);
+            let dec_amt_threshold = convert_to_decimal_u64(
+                amount_threshold,
+                portal_withdrawal_alert.token_decimals,
+            );
+
             send_alert(
                 &alert_sender,
-                String::from("Fuel Chain: Base asset is above withdrawal threshold"),
-                format!(
-                    "Base asset withdraw threshold of {} over {} seconds has been reached. Amount withdrawn: {}",
-                    amount_threshold, time_frame, amount
+                format!("Fuel Chain: {} is above withdrawal threshold {}{} for a period of {}seconds",
+                    portal_withdrawal_alert.token_name, dec_amt_threshold, portal_withdrawal_alert.token_name,
+                    time_frame,
                 ),
-                portal_withdraw_alert.alert_level.clone(),
+                format!("Amount withdrawn: {}{}", dec_amt, portal_withdrawal_alert.token_name),
+                portal_withdrawal_alert.alert_level.clone(),
             );
             send_action(
                 &action_sender,
-                portal_withdraw_alert.alert_action.clone(),
-                Some(portal_withdraw_alert.alert_level.clone()),
+                portal_withdrawal_alert.alert_action.clone(),
+                Some(portal_withdrawal_alert.alert_level.clone()),
             );
         }
     }
@@ -157,23 +161,24 @@ async fn check_fuel_token_withdrawals(
     alert_sender: UnboundedSender<AlertParams>,
     watch_config: &FuelClientWatcher,
 ) {
-    for gateway_withdraw_alert in &watch_config.gateway_withdraw_alerts {
-        if gateway_withdraw_alert.alert_level == AlertLevel::None {
+    for gateway_withdrawal_alert in &watch_config.gateway_withdrawal_alerts {
+        if gateway_withdrawal_alert.alert_level == AlertLevel::None {
             continue;
         }
 
-        let time_frame = gateway_withdraw_alert.time_frame;
+        let time_frame = gateway_withdrawal_alert.time_frame;
         let amount = match fuel_chain
             .get_token_amount_withdrawn(
                 time_frame,
-                &gateway_withdraw_alert.token_address,
+                &gateway_withdrawal_alert.token_address,
             )
             .await
         {
             Ok(amt) => {
+                let formatted_amt = convert_to_decimal_u64(amt, gateway_withdrawal_alert.token_decimals);
                 println!(
-                    "Fuel Chain: Total {} Tokens Withdrawn {} for time frame {}",
-                    gateway_withdraw_alert.token_name, amt, time_frame,
+                    "Fuel Chain: {}{} withdrawn over a period of {} seconds",
+                    formatted_amt, gateway_withdrawal_alert.token_name, time_frame,
                 );
                 amt
             },
@@ -181,45 +186,46 @@ async fn check_fuel_token_withdrawals(
                 send_alert(
                     &alert_sender,
                     format!(
-                        "Failed to check fuel chain for ERC20 {} withdrawals at address {}",
-                        gateway_withdraw_alert.token_name, gateway_withdraw_alert.token_address,
+                        "Fuel Chain: Failed to check fuel chain for ERC20 {} withdrawals at address {}",
+                        gateway_withdrawal_alert.token_name, gateway_withdrawal_alert.token_address,
                     ),
-                    format!("Failed to check ERC20 withdrawals: {}", e),
-                    gateway_withdraw_alert.alert_level.clone(),
+                    format!("Error: {}", e),
+                    gateway_withdrawal_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
-                    gateway_withdraw_alert.alert_action.clone(),
-                    Some(gateway_withdraw_alert.alert_level.clone()),
+                    gateway_withdrawal_alert.alert_action.clone(),
+                    Some(gateway_withdrawal_alert.alert_level.clone()),
                 );
                 continue;
             }
         };
 
         let amount_threshold = get_value(
-            gateway_withdraw_alert.amount,
-            gateway_withdraw_alert.token_decimals,
+            gateway_withdrawal_alert.amount,
+            gateway_withdrawal_alert.token_decimals,
         );
-
         if amount >= amount_threshold {
+            let dec_amt = convert_to_decimal_u64(amount, gateway_withdrawal_alert.token_decimals);
+            let dec_amt_threshold = convert_to_decimal_u64(
+                amount_threshold,
+                gateway_withdrawal_alert.token_decimals,
+            );
+
             send_alert(
                 &alert_sender,
-            format!(
-                    "Fuel Chain: ERC20 {} at address {} is above withdrawal threshold",
-                    gateway_withdraw_alert.token_name, 
-                    gateway_withdraw_alert.token_address,
-                ),
                 format!(
-                    "ERC20 withdraw threshold of {}{} over {} seconds has been reached. Amount withdrawn: {}{}",
-                    amount_threshold, gateway_withdraw_alert.token_name,
-                    gateway_withdraw_alert.time_frame, amount, gateway_withdraw_alert.token_name
+                    "Fuel Chain: {} at address {} is above withdrawal threshold {}{} for a period of {} seconds",
+                    gateway_withdrawal_alert.token_name, gateway_withdrawal_alert.token_address,
+                    dec_amt_threshold, gateway_withdrawal_alert.token_name, time_frame,
                 ),
-                gateway_withdraw_alert.alert_level.clone(),
+                format!("Amount withdrawn: {}{}", dec_amt, gateway_withdrawal_alert.token_name),
+                gateway_withdrawal_alert.alert_level.clone(),
             );
             send_action(
                 &action_sender,
-                gateway_withdraw_alert.alert_action.clone(),
-                Some(gateway_withdraw_alert.alert_level.clone()),
+                gateway_withdrawal_alert.alert_action.clone(),
+                Some(gateway_withdrawal_alert.alert_level.clone()),
             );
         }
     }
@@ -554,7 +560,7 @@ mod tests {
         ) = unbounded_channel();
 
         let watch_config = FuelClientWatcher {
-            portal_withdraw_alerts: vec![
+            portal_withdrawal_alerts: vec![
                 WithdrawAlert {
                     alert_level: AlertLevel::Warn,
                     amount: 1000.0,
@@ -596,7 +602,7 @@ mod tests {
         ) = unbounded_channel();
 
         let watch_config = FuelClientWatcher {
-            portal_withdraw_alerts: vec![
+            portal_withdrawal_alerts: vec![
                 WithdrawAlert {
                     alert_level: AlertLevel::Warn,
                     amount: 1000.0,
@@ -650,7 +656,7 @@ mod tests {
         ) = unbounded_channel();
 
         let watch_config = FuelClientWatcher {                
-            portal_withdraw_alerts: vec![
+            portal_withdrawal_alerts: vec![
                 WithdrawAlert {
                     alert_level: AlertLevel::None,
                     amount: 1000.0,
@@ -683,7 +689,7 @@ mod tests {
         ) = unbounded_channel();
 
         let watch_config = FuelClientWatcher {                
-            portal_withdraw_alerts: vec![],
+            portal_withdrawal_alerts: vec![],
             ..Default::default()
         };
 
@@ -707,7 +713,7 @@ mod tests {
         ) = unbounded_channel();
     
         let watch_config = FuelClientWatcher {
-            gateway_withdraw_alerts: vec![
+            gateway_withdrawal_alerts: vec![
                 WithdrawAlert {
                     alert_level: AlertLevel::Warn,
                     amount: 1000.0,
@@ -750,7 +756,7 @@ mod tests {
         ) = unbounded_channel();
     
         let watch_config = FuelClientWatcher {
-            gateway_withdraw_alerts: vec![
+            gateway_withdrawal_alerts: vec![
                 WithdrawAlert {
                     alert_level: AlertLevel::Warn,
                     amount: 1000.0,
@@ -806,7 +812,7 @@ mod tests {
         ) = unbounded_channel();
 
         let watch_config = FuelClientWatcher {                
-            gateway_withdraw_alerts: vec![
+            gateway_withdrawal_alerts: vec![
                 WithdrawAlert {
                     alert_level: AlertLevel::None,
                     amount: 1000.0,
@@ -839,7 +845,7 @@ mod tests {
         ) = unbounded_channel();
 
         let watch_config = FuelClientWatcher {                
-            gateway_withdraw_alerts: vec![],
+            gateway_withdrawal_alerts: vec![],
             ..Default::default()
         };
 

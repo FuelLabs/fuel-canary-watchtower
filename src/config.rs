@@ -2,6 +2,7 @@ use crate::alerter::AlertLevel;
 use crate::ethereum_actions::EthereumAction;
 
 use anyhow::Result;
+use ethers::types::U256;
 use serde::Deserialize;
 use std::{env, fs, time::Duration};
 
@@ -29,8 +30,8 @@ pub struct WatchtowerConfig {
 pub struct FuelClientWatcher {
     pub connection_alert: GenericAlert,
     pub block_production_alert: BlockProductionAlert,
-    pub portal_withdraw_alerts: Vec<WithdrawAlert>,
-    pub gateway_withdraw_alerts: Vec<WithdrawAlert>,
+    pub portal_withdrawal_alerts: Vec<WithdrawAlert>,
+    pub gateway_withdrawal_alerts: Vec<WithdrawAlert>,
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -183,3 +184,18 @@ pub fn load_config(file_path: &str) -> Result<WatchtowerConfig> {
     }
     Ok(config)
 }
+
+pub fn convert_to_decimal_u256(amt: U256, decimals: u8) -> String {
+    let conversion_factor = 10u128.pow(decimals as u32);
+    let amt_decimal = amt.as_u128() as f64 / conversion_factor as f64;
+    let formatted_amt = format!("{:.6}", amt_decimal);
+    formatted_amt.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+pub fn convert_to_decimal_u64(amt: u64, decimals: u8) -> String {
+    let conversion_factor = 10u64.pow(decimals as u32);
+    let amt_decimal = amt as f64 / conversion_factor as f64;
+    let formatted_amt = format!("{:.6}", amt_decimal); // Format with up to 6 decimal places
+    formatted_amt.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+

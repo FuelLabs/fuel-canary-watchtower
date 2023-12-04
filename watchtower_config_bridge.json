@@ -1,20 +1,20 @@
 {
   "watchtower_system_name": "Testing Canary",
-  "fuel_graphql": "https://<fuel_graphql>",
-  "ethereum_rpc": "https://<ethereum_rpc>",
-  "state_contract_address": "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03",
-  "portal_contract_address": "0x03f2901Db5723639978deBed3aBA66d4EA03aF73",
-  "gateway_contract_address": "0x07cf0FF4fdD5d73C4ea5E96bb2cFaa324A348269",
+  "fuel_graphql": "http://127.0.0.1:4000/graphql",
+  "ethereum_rpc": "http://127.0.0.1:8545",
+  "state_contract_address": "0x71C95911E9a5D330f4D621842EC243EE1343292e",
+  "portal_contract_address": "0x712516e61C8B383dF4A63CFe83d7701Bce54B03e",
+  "gateway_contract_address": "0x59F2f1fCfE2474fD5F0b9BA1E73ca90b143Eb8d0",
   "min_duration_from_start_to_err": {
     "secs": 300000,
     "nanos": 0
   },
   "duplicate_alert_delay": 900,
-  "pagerduty_api_key": "",
   "alert_cache_expiry": {
     "secs": 300000,
     "nanos": 0
   },
+  "alert_cache_size": 100,
   "fuel_client_watcher": {
     "connection_alert": {
       "alert_level": "Warn"
@@ -26,29 +26,29 @@
     "portal_withdrawal_alerts": [
       {
         "alert_level": "Info",
-        "time_frame": 60,
-        "amount": 10
+        "time_frame": 3000,
+        "amount": 250
       },
       {
         "alert_level": "Info",
-        "time_frame": 300,
-        "amount": 250
+        "time_frame": 60,
+        "amount": 10
       }
     ],
     "gateway_withdrawal_alerts": [
       {
         "alert_level": "Info",
         "token_name": "USDC",
-        "token_address": "0x6c1d19D4a2e9Eb0cE3606eB4A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "time_frame": 60,
-        "amount": 1000
+        "token_address": "0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964",
+        "time_frame": 3000,
+        "amount": 25000
       },
       {
         "alert_level": "Info",
         "token_name": "USDC",
-        "token_address": "0x6c1d19D4a2e9Eb0cE3606eB4A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-        "time_frame": 300,
-        "amount": 25000
+        "token_address": "0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964",
+        "time_frame": 60,
+        "amount": 1000
       }
     ]
   },
@@ -79,28 +79,30 @@
       },
       {
         "alert_level": "Info",
+        "time_frame": 300,
         "token_name": "ETH",
         "token_address": "0x0000000000000000000000000000000000000000",
         "token_decimals": 18,
-        "time_frame": 300,
         "amount": 250
       }
     ],
     "portal_withdrawal_alerts": [
       {
-        "alert_level": "Info",
+        "alert_action": "PausePortal",
+        "alert_level": "Warn",
+        "time_frame": 60,
         "token_name": "ETH",
         "token_address": "0x0000000000000000000000000000000000000000",
         "token_decimals": 18,
-        "time_frame": 60,
         "amount": 10
       },
       {
+        "alert_action": "PausePortal",
         "alert_level": "Info",
+        "time_frame": 300,
         "token_name": "ETH",
         "token_address": "0x0000000000000000000000000000000000000000",
         "token_decimals": 18,
-        "time_frame": 300,
         "amount": 250
       }
     ],
@@ -108,7 +110,7 @@
       {
         "alert_level": "Info",
         "token_name": "USDC",
-        "token_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "token_address": "0x0f5D1ef48f12b6f691401bfe88c2037c690a6afe",
         "token_decimals": 18,
         "time_frame": 60,
         "amount": 1000
@@ -116,7 +118,7 @@
       {
         "alert_level": "Info",
         "token_name": "USDC",
-        "token_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "token_address": "0x0f5D1ef48f12b6f691401bfe88c2037c690a6afe",
         "token_decimals": 18,
         "time_frame": 300,
         "amount": 25000
@@ -126,18 +128,18 @@
       {
         "alert_level": "Info",
         "token_name": "USDC",
-        "token_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "token_address": "0x0f5D1ef48f12b6f691401bfe88c2037c690a6afe",
         "token_decimals": 18,
-        "time_frame": 60,
-        "amount": 1000
+        "time_frame": 300,
+        "amount": 25000
       },
       {
         "alert_level": "Info",
         "token_name": "USDC",
-        "token_address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "token_address": "0x0f5D1ef48f12b6f691401bfe88c2037c690a6afe",
         "token_decimals": 18,
-        "time_frame": 300,
-        "amount": 25000
+        "time_frame": 60,
+        "amount": 1000
       }
     ]
   }

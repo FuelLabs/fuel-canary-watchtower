@@ -35,7 +35,7 @@ fuel_client_watcher: {
     alert_level: <level of alert [None, Info, Warn, Error]>
     alert_action: <(optional) action to take [None, PauseState, PauseGateway, PausePortal, PauseAll]>
   }
-  portal_withdraw_alerts: [{
+  portal_withdrawal_alerts: [{
       alert_level: <level of alert [None, Info, Warn, Error]>
       alert_action: <(optional) action to take [None, PauseState, PauseGateway, PausePortal, PauseAll]>
       time_frame: <window of time to check for threshold>
@@ -43,7 +43,7 @@ fuel_client_watcher: {
     }
     <aditional withdraw alert configs>
   ]
-  gateway_withdraw_alerts: [{
+  gateway_withdrawal_alerts: [{
       alert_level: <level of alert [None, Info, Warn, Error]>
       alert_action: <(optional) action to take [None, PauseState, PauseGateway, PausePortal, PauseAll]>
       token_name: <name of token for reporting purposes>

@@ -11,7 +11,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
-use crate::config::EthereumClientWatcher;
+use crate::config::{EthereumClientWatcher, convert_to_decimal_u256};
 use crate::ethereum_watcher::ethereum_utils::get_value;
 
 use gateway_contract::GatewayContractTrait;
@@ -44,8 +44,8 @@ async fn check_chain_connection(
     if let Err(e) = ethereum_chain.check_connection().await {
         send_alert(
             &alert_sender,
-            String::from("Failed to check ethereum connection"),
-            format!("Failed to check ethereum connection: {}", e),
+            String::from("Ethereum Chain: Failed to check connection"),
+            format!("Error: {}", e),
             watch_config.connection_alert.alert_level.clone(),
         );
         send_action(
@@ -72,8 +72,8 @@ async fn check_block_production(
         Err(e) => {
             send_alert(
                 &alert_sender,
-                    String::from("Failed to check ethereum block"),
-                format!("Failed to check ethereum block production: {}", e),
+                    String::from("Ethereum Chain: Failed to check get latest block"),
+                format!("Error: {}", e),
                 watch_config.block_production_alert.alert_level.clone(),
             );
             send_action(
@@ -88,11 +88,10 @@ async fn check_block_production(
     if seconds_since_last_block > watch_config.block_production_alert.max_block_time {
         send_alert(
             &alert_sender,
-                String::from("Ethereum block is taking long"),
-        format!(
-                "Next ethereum block is taking longer than {} seconds. Last block was {} seconds ago.",
-                watch_config.block_production_alert.max_block_time, seconds_since_last_block
-            ),
+            format!("Ethereum Chain: block is taking longer than {}seconds", 
+                watch_config.block_production_alert.max_block_time,
+                ),
+        format!("Last block was {}seconds ago.", seconds_since_last_block),
             watch_config.block_production_alert.alert_level.clone(),
         );
         send_action(
@@ -127,8 +126,8 @@ async fn check_account_balance(
         Err(e) => {
             send_alert(
                 &alert_sender,
-                String::from("Failed to check ethereum account funds"),
-                format!("Failed to check ethereum account funds: {}", e),
+                String::from("Ethereum Chain: Failed to check ethereum account funds"),
+                format!("Error: {}", e),
                 watch_config.account_funds_alert.alert_level.clone(),
             );
             send_action(
@@ -147,11 +146,8 @@ async fn check_account_balance(
     if retrieved_balance < min_balance {
         send_alert(
             &alert_sender,
-            String::from("Ethereum account low on funds"),
-            format!(
-                "Ethereum account ({}) is low on funds. Current balance: {}",
-                address, retrieved_balance,
-            ),
+            format!("Ethereum Chain: Ethereum account {} is low on funds", address),
+            format!("Current balance: {}", retrieved_balance),
             watch_config.account_funds_alert.alert_level.clone(),
         );
         send_action(
@@ -181,8 +177,8 @@ async fn check_invalid_commits(
         Err(e) => {
             send_alert(
                 &alert_sender,
-                String::from("Failed to check state contract"),
-                format!("Failed to check state contract commits: {e}"),
+                String::from("Ethereum Chain: Failed to check state contract"),
+                format!("Error: {}", e),
                 watch_config.invalid_state_commit_alert.alert_level.clone(),
             );
             send_action(
@@ -200,10 +196,8 @@ async fn check_invalid_commits(
                 if !valid {
                     send_alert(
                         &alert_sender,
-                        String::from("Invalid commit was made on the state contract"),
-                        format!(
-                            "An invalid commit was made on the state contract. Hash: {}", hash,
-                        ),
+                        String::from("Ethereum Chain: Invalid commit was made on the state contract"),
+                        format!("Block Hash: {} not found on the fuel chain", hash),
                         watch_config.invalid_state_commit_alert.alert_level.clone(),
                     );
                     send_action(
@@ -216,8 +210,8 @@ async fn check_invalid_commits(
             Err(e) => {
                 send_alert(
                     &alert_sender,
-                    String::from("Failed to check fuel chain state commit contract"),
-                    format!("Failed to check fuel chain state commit: {}", e),
+                    String::from("Fuel Chain: Failed to check fuel chain for state commit"),
+                    format!("Error: {}", e),
                     watch_config.invalid_state_commit_alert.alert_level.clone(),
                 );
                 send_action(
@@ -252,15 +246,19 @@ async fn check_base_asset_deposits(
             *last_commit_check_block,
         ).await {
             Ok(amt) => {
-                println!("Ethereum Chain: Total Base Asset Deposited {} for time frame {}",
-                            amt, time_frame);
+                let formatted_amt = convert_to_decimal_u256(amt, portal_deposit_alert.token_decimals);
+                println!(
+                    "Ethereum Chain: {}{} deposited over a period of {} seconds",
+                    formatted_amt, portal_deposit_alert.token_name, time_frame,
+                );
                 amt
             },
             Err(e) => {
                 send_alert(
                     &alert_sender,
-                        String::from("Failed to check portal contract for base asset deposits"),
-                    format!("Failed to check base asset deposits: {}", e),
+                    format!("Ethereum Chain: Failed to check portal contract for {} deposits",
+                                    portal_deposit_alert.token_name),
+                    format!("Error: {}", e),
                     portal_deposit_alert.alert_level.clone(),
                 );
                 send_action(
@@ -277,13 +275,20 @@ async fn check_base_asset_deposits(
             portal_deposit_alert.token_decimals,
         );
         if amount >= amount_threshold {
+            let dec_amt = convert_to_decimal_u256(amount, portal_deposit_alert.token_decimals);
+            let dec_amt_threshold = convert_to_decimal_u256(
+                amount_threshold,
+                portal_deposit_alert.token_decimals,
+            );
+
             send_alert(
                 &alert_sender,
-                    String::from("Ethereum Chain: Base asset is above deposit threshold"),
                 format!(
-                    "Base asset deposit threshold of {} over {} seconds has been reached. Amount deposited: {}",
-                    amount_threshold, time_frame, amount
-                ),
+                        "Ethereum Chain: {} is above deposit threshold {}{} for a period of {} seconds",
+                        portal_deposit_alert.token_name, dec_amt_threshold, portal_deposit_alert.token_name,
+                        time_frame,
+                    ),
+                format!("Amount deposited: {}{}", dec_amt, portal_deposit_alert.token_name),
                 portal_deposit_alert.alert_level.clone(),
             );
             send_action(
@@ -313,15 +318,18 @@ async fn check_base_asset_withdrawals(
             *last_commit_check_block,
         ).await {
             Ok(amt) => {
-                println!("Ethereum Chain: Total Base Asset Withdrawn {} for time frame {}",
-                            amt, time_frame);
+                let formatted_amt = convert_to_decimal_u256(amt, portal_withdrawal_alert.token_decimals);
+                println!("Ethereum Chain: {}{} withdrawn over a period of {} seconds",
+                    formatted_amt, portal_withdrawal_alert.token_name, time_frame,
+                );
                 amt
             },
             Err(e) => {
                 send_alert(
                     &alert_sender,
-                    String::from("Failed to check portal contract for base asset withdrawals"),
-                    format!("Failed to check base asset withdrawals: {}", e),
+                    format!("Ethereum Chain: Failed to check portal contract for {} withdrawals",
+                            portal_withdrawal_alert.token_name),
+                    format!("Error: {}", e),
                     portal_withdrawal_alert.alert_level.clone(),
                 );
                 send_action(
@@ -338,13 +346,20 @@ async fn check_base_asset_withdrawals(
             portal_withdrawal_alert.token_decimals,
         );
         if amount >= amount_threshold {
+            let dec_amt = convert_to_decimal_u256(amount, portal_withdrawal_alert.token_decimals);
+            let dec_amt_threshold = convert_to_decimal_u256(
+                amount_threshold,
+                portal_withdrawal_alert.token_decimals,
+            );
+
             send_alert(
                 &alert_sender,
-                String::from("Ethereum Chain: Base asset is above withdrawal threshold"),
                 format!(
-                    "Base asset withdrawal threshold of {} over {} seconds has been exceeded. Amount withdrawn: {}",
-                    amount_threshold, time_frame, amount
+                    "Ethereum Chain: {} is above withdrawal threshold {}{} for a period of {}seconds",
+                    portal_withdrawal_alert.token_name, dec_amt_threshold, portal_withdrawal_alert.token_name,
+                    time_frame,
                 ),
+                format!("Amount withdrawn: {}{}", dec_amt, portal_withdrawal_alert.token_name),
                 portal_withdrawal_alert.alert_level.clone(),
             );
             send_action(
@@ -381,20 +396,23 @@ async fn check_token_deposits(
             .await
         {
             Ok(amt) => {
-                println!("Ethereum Chain: Total {} Tokens Deposited {} for time frame {}",
-                            gateway_deposit_alert.token_name, amt, time_frame);
+                let formatted_amt = convert_to_decimal_u256(amt, gateway_deposit_alert.token_decimals);
+                println!(
+                    "Ethereum Chain: {}{} deposited over a period of {} seconds",
+                    formatted_amt, gateway_deposit_alert.token_name, time_frame,
+                );
                 amt
             },
             Err(e) => {
                 send_alert(
                     &alert_sender,
                     format!(
-                            "Failed to check ERC20 deposits {} at address {}",
+                            "Ethereum Chain: Failed to check gateway contract for {} at address {}",
                             gateway_deposit_alert.token_name, 
                             gateway_deposit_alert.token_address,
                         ),
-                    format!("Failed to check ERC20 deposits: {}", e),
-                    gateway_deposit_alert.alert_level.clone(),
+                        format!("Error: {}", e),
+            gateway_deposit_alert.alert_level.clone(),
                 );
                 send_action(
                     &action_sender,
@@ -410,19 +428,21 @@ async fn check_token_deposits(
             gateway_deposit_alert.token_decimals,
         );
         if amount >= amount_threshold {
+            let dec_amt = convert_to_decimal_u256(amount, gateway_deposit_alert.token_decimals);
+            let dec_amt_threshold = convert_to_decimal_u256(
+                amount_threshold,
+                gateway_deposit_alert.token_decimals,
+            );
+
             send_alert(
                 &alert_sender,
                 format!(
-                        "Ethereum Chain: ERC20 {} at address {} is above deposit threshold",
-                        gateway_deposit_alert.token_name, 
-                        gateway_deposit_alert.token_address,
+                        "Ethereum Chain: {} at address {} is above deposit threshold {}{} for a period of {} seconds",
+                        gateway_deposit_alert.token_name, gateway_deposit_alert.token_address,
+                        dec_amt_threshold, gateway_deposit_alert.token_name, time_frame,
                     ),
-                    format!(
-                        "ERC20 deposit threshold of {}{} over {} seconds has been reached. Amount deposited: {}{}",
-                        amount_threshold, gateway_deposit_alert.token_name,
-                        gateway_deposit_alert.time_frame, amount, gateway_deposit_alert.token_name
-                    ),
-            gateway_deposit_alert.alert_level.clone(),
+                    format!("Amount deposited: {}{}", dec_amt, gateway_deposit_alert.token_name),
+                gateway_deposit_alert.alert_level.clone(),
             );
             send_action(
                 &action_sender,
@@ -456,19 +476,21 @@ async fn check_token_withdrawals(
             .await
         {
             Ok(amt) => {
-                println!("Ethereum Chain: Total {} Tokens Withdrawn {} for time frame {}",
-                            gateway_withdrawal_alert.token_name, amt, time_frame);
+                let formatted_amt = convert_to_decimal_u256(amt, gateway_withdrawal_alert.token_decimals);
+                println!(
+                    "Ethereum Chain: {}{} withdrawn over a period of {} seconds",
+                    formatted_amt, gateway_withdrawal_alert.token_name, time_frame,
+                );
                 amt
             }
             Err(e) => {
                 send_alert(
                     &alert_sender,
                     format!(
-                            "Ethereum Chain: Failed to check ERC20 withdrawals {} at address {}",
-                            gateway_withdrawal_alert.token_name, 
-                            gateway_withdrawal_alert.token_address,
+                            "Ethereum Chain: Failed to check gateway contract for {} at address {}",
+                            gateway_withdrawal_alert.token_name, gateway_withdrawal_alert.token_address,
                         ),
-                    format!("Failed to check ERC20 withdrawals: {}", e),
+                    format!("Error: {}", e),
                     gateway_withdrawal_alert.alert_level.clone(),
                 );
                 send_action(
@@ -485,19 +507,21 @@ async fn check_token_withdrawals(
             gateway_withdrawal_alert.token_decimals,
         );
         if amount >= amount_threshold {
+            let dec_amt = convert_to_decimal_u256(amount, gateway_withdrawal_alert.token_decimals);
+            let dec_amt_threshold = convert_to_decimal_u256(
+                amount_threshold,
+                gateway_withdrawal_alert.token_decimals,
+            );
+
             send_alert(
                 &alert_sender,
                 format!(
-                        "Ethereum Chain: ERC20 {} at address {} is above withdrawal threshold",
-                        gateway_withdrawal_alert.token_name, 
-                        gateway_withdrawal_alert.token_address,
-                    ),
-                    format!(
-                        "ERC20 withdrawal threshold of {}{} over {} seconds has been reached. Amount withdrawn: {}{}",
-                        amount_threshold, gateway_withdrawal_alert.token_name,
-                        gateway_withdrawal_alert.time_frame, amount, gateway_withdrawal_alert.token_name
-                    ),
-                    gateway_withdrawal_alert.alert_level.clone(),
+                    "Ethereum Chain: {} at address {} is above withdrawal threshold {}{} for a period of {} seconds",
+                    gateway_withdrawal_alert.token_name, gateway_withdrawal_alert.token_address,
+                    dec_amt_threshold, gateway_withdrawal_alert.token_name, time_frame,
+                ),
+                format!("Amount withdrawn: {}{}", dec_amt, gateway_withdrawal_alert.token_name),
+                gateway_withdrawal_alert.alert_level.clone(),
             );
             send_action(
                 &action_sender,
