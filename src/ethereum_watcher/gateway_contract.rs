@@ -4,33 +4,50 @@ use anyhow::Result;
 use ethers::abi::Address;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::{abigen, SignerMiddleware};
-use ethers::providers::{Middleware};
-use ethers::signers::{Wallet};
+use ethers::providers::Middleware;
+use ethers::signers::Wallet;
 use ethers::types::{Filter, H160, H256, U256};
-use std::cmp::max;
 
-use std::ops::Mul;
+use async_trait::async_trait;
+
+use std::cmp::max;
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
 abigen!(FuelERC20Gateway, "./abi/FuelERC20Gateway.json");
 
+#[async_trait]
+#[cfg_attr(test, automock)]
+pub trait GatewayContractTrait: Send + Sync {
+    async fn initialize(&mut self) -> Result<()>;
+    async fn get_token_amount_deposited(
+        &self,
+        timeframe: u32,
+        token_address: &str,
+        latest_block_num: u64,
+    ) -> Result<U256>;
+    async fn get_token_amount_withdrawn(
+        &self,
+        timeframe: u32,
+        token_address: &str,
+        latest_block_num: u64,
+    ) -> Result<U256>;
+    async fn pause(&self) -> Result<()>;
+}
+
 #[derive(Clone, Debug)]
-pub struct GatewayContract<P>
-where
-    P: Middleware,
-{
+pub struct GatewayContract<P: Middleware> {
     provider: Arc<P>,
-    wallet:  Wallet<SigningKey>,
+    wallet: Wallet<SigningKey>,
     contract: Option<FuelERC20Gateway<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>>,
     address: H160,
     read_only: bool,
 }
 
-impl <P>GatewayContract<P>
-where
-    P: Middleware + 'static,
-{
+impl<P: Middleware + 'static> GatewayContract<P> {
     pub fn new(
         gateway_contract_address: String,
         read_only: bool,
@@ -47,30 +64,26 @@ where
             read_only,
         })
     }
+}
 
-    pub async fn initialize(&mut self) -> Result<()> {
-
+#[async_trait]
+impl<P: Middleware + 'static> GatewayContractTrait for GatewayContract<P> {
+    async fn initialize(&mut self) -> Result<()> {
         // Create the contract instance
-        let client = SignerMiddleware::new(
-            self.provider.clone(),
-            self.wallet.clone(),
-        );
+        let client = SignerMiddleware::new(self.provider.clone(), self.wallet.clone());
 
-        let contract = FuelERC20Gateway::new(
-            self.address, Arc::new(client),
-        );
+        let contract = FuelERC20Gateway::new(self.address, Arc::new(client));
 
         // Try calling a read function to check if the contract is valid
-        match contract.paused().call().await {
-            Err(_) => Err(anyhow::anyhow!("Invalid gateway contract.")),
-            Ok(_) => {
-                self.contract = Some(contract);
-                Ok(())
-            }
+        if contract.paused().call().await.is_ok() {
+            self.contract = Some(contract);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Invalid gateway contract"))
         }
     }
 
-    pub async fn get_token_amount_deposited(
+    async fn get_token_amount_deposited(
         &self,
         timeframe: u32,
         token_address: &str,
@@ -96,9 +109,7 @@ where
                 Ok(logs) => {
                     let mut total = U256::zero();
                     for log in logs {
-                        let amount = U256::from_big_endian(
-                            &log.data[32..64],
-                        ).mul(U256::from(1_000_000_000));
+                        let amount = U256::from_big_endian(&log.data[0..32]);
                         total += amount;
                     }
                     return Ok(total);
@@ -114,7 +125,7 @@ where
         Ok(U256::zero())
     }
 
-    pub async fn get_token_amount_withdrawn(
+    async fn get_token_amount_withdrawn(
         &self,
         timeframe: u32,
         token_address: &str,
@@ -126,7 +137,7 @@ where
             Ok(addr) => addr,
             Err(e) => return Err(anyhow::anyhow!("{e}")),
         };
-    
+
         // Withdrawal(bytes32 indexed recipient, address indexed tokenId, bytes32 fuelTokenId,
         // uint256 amount)
         let token_topics = H256::from(token_address);
@@ -140,9 +151,7 @@ where
                 Ok(logs) => {
                     let mut total = U256::zero();
                     for log in logs {
-                        let amount = U256::from_big_endian(
-                            &log.data[32..64],
-                        ).mul(U256::from(1_000_000_000));
+                        let amount = U256::from_big_endian(&log.data[0..32]);
                         total += amount;
                     }
                     return Ok(total);
@@ -154,86 +163,72 @@ where
                 }
             }
         }
-    
+
         Ok(U256::zero())
     }
 
-    pub async fn pause(&self) -> Result<()> {
+    async fn pause(&self) -> Result<()> {
         if self.read_only {
-            return Err(anyhow::anyhow!("Ethereum account not configured."));
+            return Err(anyhow::anyhow!("Ethereum account not configured"));
         }
 
-        match &self.contract {
-            Some(contract) => {
-                let result = contract.pause().call().await;
-                match result {
-                    Err(e) => Err(anyhow::anyhow!("Failed to pause gateway contract: {}", e)),
-                    Ok(_) => Ok(()),
-                }
+        let contract = self
+            .contract
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Gateway Contract not initialized"))?;
+
+        // Check if the contract is already paused
+        let is_paused = contract.paused().call().await?;
+        if is_paused {
+            // If the contract is already paused, do nothing
+            return Ok(());
+        }
+
+        // Proceed with pausing the contract
+        let pause_call = contract.pause();
+        let result = pause_call.send().await;
+        match result {
+            Err(e) => Err(anyhow::anyhow!("Failed to pause gateway contract: {}", e)),
+            Ok(res) => {
+                println!("Pausing gateway contract at tx {:?}", res);
+                Ok(())
             }
-            None => Err(anyhow::anyhow!("Contract not initialized")),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ethers::abi::Token;
     use ethers::prelude::*;
-    use ethers::providers::Provider;
-    use std::sync::Arc;
     use std::str::FromStr;
 
-    use super::GatewayContract;
-
-    async fn setup_gateway_contract() -> Result<(GatewayContract<Provider<MockProvider>>, MockProvider), Box<dyn std::error::Error>> {
-
-        let (provider, mock) = Provider::mocked();
-        let arc_provider = Arc::new(provider);
-    
-        // contract.paused().call() response
-        let paused_response_hex: String = format!("0x{}", "00".repeat(32));
-        mock.push_response(
-            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
-        );
-        
-        let read_only: bool = false;
-        let chain_id: U64 = ethers::types::U64::from(1337);
-        let key_str: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
-        let gateway_contract_address: String = "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string();
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
-    
-        // Create a new gateway_contract with the dependencies injected.
-        let gateway_contract: GatewayContract<Provider<MockProvider>> = GatewayContract::new(
-            gateway_contract_address,
-            read_only,
-            arc_provider,
-            wallet,
-        )?;
-    
-        Ok((gateway_contract, mock))
-    }
+    use crate::{
+        ethereum_watcher::gateway_contract::GatewayContractTrait,
+        test_utils::test_utils::{setup_gateway_contract, setup_wallet_and_provider},
+    };
 
     #[tokio::test]
     async fn new_gateway_contract_creates_instance_correctly() {
-        let (
-            gateway_contract,
-             _mock,
-        ) = setup_gateway_contract().await.expect("Setup failed");
+        let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let gateway_contract = setup_gateway_contract(provider, mock, wallet).expect("Setup failed");
+
         assert!(!gateway_contract.read_only);
-        assert_eq!(gateway_contract.address, H160::from_str("0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03").unwrap());
+        assert_eq!(
+            gateway_contract.address,
+            H160::from_str("0x07cf0FF4fdD5d73C4ea5E96bb2cFaa324A348269").unwrap()
+        );
     }
 
     #[tokio::test]
     async fn initialize_gateway_contract_initializes_contract() {
-        let (
-            mut gateway_contract,
-             mock,
-        ) = setup_gateway_contract().await.expect("Setup failed");
+        let (arc_provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let mut gateway_contract = setup_gateway_contract(arc_provider, mock.clone(), wallet).expect("Setup failed");
 
         let additional_response_hex = format!("0x{}", "00".repeat(32));
-        mock.push_response(MockResponse::Value(serde_json::Value::String(additional_response_hex.to_string())));
+        mock.push_response(MockResponse::Value(serde_json::Value::String(
+            additional_response_hex.to_string(),
+        )));
 
         let result = gateway_contract.initialize().await;
         assert!(result.is_ok());
@@ -242,21 +237,18 @@ mod tests {
 
     #[tokio::test]
     async fn get_token_amount_deposited_retrieves_correct_amount() {
-        let (
-            gateway_contract,
-            mock,
-        ) = setup_gateway_contract().await.expect("Setup failed");
+        let (arc_provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let gateway_contract = setup_gateway_contract(arc_provider, mock.clone(), wallet).expect("Setup failed");
 
         // Serialize the deposit amounts to a byte vector
-        // Create a vector with 32 zero bytes
-        let mut deposit_data_one: Vec<u8> = vec![0u8; 32];
-        let mut deposit_data_two: Vec<u8> = vec![0u8; 32];
 
         // Extend the vectors with the encoded deposit amounts
-        deposit_data_one.extend(ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]));
-        deposit_data_two.extend(ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]));
+        let deposit_data_one = ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]);
+        let deposit_data_two = ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]);
 
-        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
+        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
         let log_entry_one = Log {
             address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
             topics: vec![empty_data],
@@ -293,28 +285,29 @@ mod tests {
         let result = gateway_contract
             .get_token_amount_deposited(timeframe, token_address, latest_block_num)
             .await;
-    
+
         assert!(result.is_ok(), "Failed to get token amount deposited");
 
         let total_amount: U256 = result.unwrap();
-        assert_eq!(total_amount.as_u64(), 330000000000000, "Total amount deposited does not match expected value");
+        assert_eq!(
+            total_amount.as_u64(),
+            330000,
+            "Total amount deposited does not match expected value"
+        );
     }
 
     #[tokio::test]
     async fn get_token_amount_withdrawn_retrieves_correct_amount() {
-        let (
-            gateway_contract,
-            mock,
-        ) = setup_gateway_contract().await.expect("Setup failed");
+        let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let gateway_contract = setup_gateway_contract(provider, mock.clone(), wallet).expect("Setup failed");
 
-        // Create and extend the vectors with the encoded withdrawal amounts, multiplied by 1_000_000_000
-        let mut withdrawal_data_one: Vec<u8> = vec![0u8; 32];
-        let mut withdrawal_data_two: Vec<u8> = vec![0u8; 32];
+        // Create and extend the vectors with the encoded withdrawal amounts
+        let withdrawal_data_one = ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]);
+        let withdrawal_data_two = ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]);
 
-        withdrawal_data_one.extend(ethers::abi::encode(&[Token::Uint(U256::from(100000u64))]));
-        withdrawal_data_two.extend(ethers::abi::encode(&[Token::Uint(U256::from(230000u64))]));
-
-        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
+        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
         let log_entry_one = Log {
             address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
             topics: vec![empty_data],
@@ -355,27 +348,11 @@ mod tests {
         assert!(result.is_ok(), "Failed to get token amount withdrawn");
 
         let total_amount: U256 = result.unwrap();
-        let expected_total = 330000u64 * 1_000_000_000;
-        assert_eq!(total_amount.as_u64(), expected_total, "Total amount withdrawn does not match expected value");
-    }
-
-    #[tokio::test]
-    async fn pause_gateway_contract_pauses_contract() {
-        let (
-            mut gateway_contract,
-             mock,
-        ) = setup_gateway_contract().await.expect("Setup failed");
-
-        // Test pause before initialization
-        assert!(gateway_contract.pause().await.is_err());
-
-        // Initialize and test pause after initialization
-        gateway_contract.initialize().await.expect("Initialization failed");
-
-        let pause_response_hex: String = format!("0x{}", "01".repeat(32));
-        mock.push_response(MockResponse::Value(serde_json::Value::String(pause_response_hex.to_string())));
-
-        // Test pause with the contract initialized
-        assert!(gateway_contract.pause().await.is_ok());
+        let expected_total = 330000u64;
+        assert_eq!(
+            total_amount.as_u64(),
+            expected_total,
+            "Total amount withdrawn does not match expected value"
+        );
     }
 }

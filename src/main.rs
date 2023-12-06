@@ -1,7 +1,7 @@
+use anyhow::Result;
 use fuel_canary_watchtower::WatchtowerConfig;
 use log::{error, info};
 use std::env;
-use anyhow::Result;
 
 pub static WATCHTOWER_CONFIG_FILE: &str = "watchtower_config.json";
 pub static LOGGING_CONFIG_FILE: &str = "logging_config.yaml";
@@ -22,10 +22,7 @@ async fn main() {
 }
 
 fn setup_logging() {
-    log4rs::init_file(
-        LOGGING_CONFIG_FILE,
-         Default::default(),
-    ).expect("Failed to initialize logging");
+    log4rs::init_file(LOGGING_CONFIG_FILE, Default::default()).expect("Failed to initialize logging");
 }
 
 fn determine_config_file() -> String {

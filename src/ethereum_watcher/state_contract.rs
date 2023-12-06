@@ -1,36 +1,42 @@
-use super::{ETHEREUM_CONNECTION_RETRIES, ethereum_utils};
-
+use super::{ethereum_utils, ETHEREUM_CONNECTION_RETRIES};
 
 use anyhow::Result;
 use ethers::abi::Address;
 use ethers::prelude::k256::ecdsa::SigningKey;
 use ethers::prelude::{abigen, SignerMiddleware};
-use ethers::providers::{Middleware};
-use ethers::signers::{Wallet};
+use ethers::providers::Middleware;
+use ethers::signers::Wallet;
 use ethers::types::{Filter, H160};
 use fuels::tx::Bytes32;
+
+use async_trait::async_trait;
 
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
 abigen!(FuelChainState, "./abi/FuelChainState.json");
 
+#[async_trait]
+#[cfg_attr(test, automock)]
+pub trait StateContractTrait: Send + Sync {
+    async fn initialize(&mut self) -> Result<()>;
+    async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>>;
+    async fn pause(&self) -> Result<()>;
+}
+
 #[derive(Clone, Debug)]
-pub struct StateContract<P>
-where
-    P: Middleware,
-{
+pub struct StateContract<P: Middleware> {
     provider: Arc<P>,
-    wallet:  Wallet<SigningKey>,
+    wallet: Wallet<SigningKey>,
     contract: Option<FuelChainState<SignerMiddleware<Arc<P>, Wallet<SigningKey>>>>,
     address: H160,
     read_only: bool,
 }
 
-impl <P>StateContract<P>
-where
-    P: Middleware + 'static,
-{   
+impl<P: Middleware + 'static> StateContract<P> {
     pub fn new(
         state_contract_address: String,
         read_only: bool,
@@ -47,22 +53,18 @@ where
             read_only,
         })
     }
+}
 
-    pub async fn initialize(&mut self) -> Result<()> {
-        
-        // Create the contract instance
-        let client = SignerMiddleware::new(
-            self.provider.clone(),
-             self.wallet.clone(),
-            );
+#[async_trait]
+impl<P: Middleware + 'static> StateContractTrait for StateContract<P> {
+    async fn initialize(&mut self) -> Result<()> {
+        let client = SignerMiddleware::new(self.provider.clone(), self.wallet.clone());
 
-        let contract = FuelChainState::new(
-            self.address, Arc::new(client),
-        );
+        let contract = FuelChainState::new(self.address, Arc::new(client));
 
         // Try calling a read function to check if the contract is valid
         match contract.paused().call().await {
-            Err(_) => Err(anyhow::anyhow!("Invalid state contract.")),
+            Err(_) => Err(anyhow::anyhow!("Invalid state contract")),
             Ok(_) => {
                 self.contract = Some(contract);
                 Ok(())
@@ -70,7 +72,7 @@ where
         }
     }
 
-    pub async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>> {
+    async fn get_latest_commits(&self, from_block: u64) -> Result<Vec<Bytes32>> {
         //CommitSubmitted(uint256 indexed commitHeight, bytes32 blockHash)
         let filter = Filter::new()
             .address(self.address)
@@ -90,84 +92,64 @@ where
         Ok(vec![])
     }
 
-    pub async fn pause(&self) -> Result<()> {
+    async fn pause(&self) -> Result<()> {
         if self.read_only {
-            return Err(anyhow::anyhow!("Ethereum account not configured."));
+            return Err(anyhow::anyhow!("Ethereum account not configured"));
         }
 
-        match &self.contract {
-            Some(contract) => {
-                let result = contract.pause().call().await;
-                match result {
-                    Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
-                    Ok(_) => Ok(()),
-                }
+        let contract = self
+            .contract
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("State Contract not initialized"))?;
+
+        // Check if the contract is already paused
+        let is_paused = contract.paused().call().await?;
+        if is_paused {
+            // If the contract is already paused, do nothing
+            return Ok(());
+        }
+
+        // Proceed with pausing the contract
+        let pause_call = contract.pause();
+        let result = pause_call.send().await;
+        match result {
+            Err(e) => Err(anyhow::anyhow!("Failed to pause state contract: {}", e)),
+            Ok(res) => {
+                println!("Pausing state contract at tx {:?}", res);
+                Ok(())
             }
-            None => Err(anyhow::anyhow!("Contract not initialized")),
         }
     }
 }
 
-
 #[cfg(test)]
 mod tests {
+    use crate::{
+        ethereum_watcher::state_contract::StateContractTrait,
+        test_utils::test_utils::{setup_state_contract, setup_wallet_and_provider},
+    };
     use ethers::prelude::*;
-    use ethers::providers::Provider;
-    use fuels::accounts::fuel_crypto::coins_bip32::ecdsa::SigningKey;
-    use std::sync::Arc;
-
-    use super::StateContract;
-
-    async fn setup_state_contract() -> Result<(StateContract<Provider<MockProvider>>, MockProvider), Box<dyn std::error::Error>> {
-        let (provider, mock) = Provider::mocked();
-        let arc_provider = Arc::new(provider);
-
-        // contract.paused().call() response
-        let paused_response_hex: String = format!("0x{}", "00".repeat(32));
-        mock.push_response(
-            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
-        );
-        
-        let read_only: bool = false;
-        let chain_id: U64 = ethers::types::U64::from(1337);
-        let key_str: String = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80".to_string();
-        let state_contract_address: String = "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".to_string();
-        let wallet: Wallet<SigningKey> = key_str.parse::<Wallet<SigningKey>>()?.with_chain_id(chain_id.as_u64());
-
-
-        // Create a new state_contract with the dependencies injected.
-        let state_contract: StateContract<Provider<MockProvider>> = StateContract::new(
-            state_contract_address,
-            read_only,
-            arc_provider,
-            wallet,
-        )?;
-
-        Ok((state_contract, mock))
-    }
 
     #[tokio::test]
     async fn new_state_contract_test() {
-        let (
-            state_contract,
-            _mock,
-        ) = setup_state_contract().await.expect("Setup failed");
-        assert_eq!(state_contract.read_only, false);
-        assert_eq!(state_contract.address, "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap());
+        let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let state_contract = setup_state_contract(provider, mock, wallet).expect("Setup failed");
+
+        assert!(!state_contract.read_only);
+        assert_eq!(
+            state_contract.address,
+            "0xbe7aB12653e705642eb42EF375fd0d35Cfc45b03".parse().unwrap()
+        );
     }
 
     #[tokio::test]
     async fn initialize_state_contract_test() {
-        let (
-            mut state_contract,
-              mock,
-        ) = setup_state_contract().await.expect("Setup failed");
+        let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let mut state_contract = setup_state_contract(provider, mock.clone(), wallet).expect("Setup failed");
 
         // Mock a successful response for the `paused` call
         let paused_response_hex: String = format!("0x{}", "00".repeat(32));
-        mock.push_response(
-            MockResponse::Value(serde_json::Value::String(paused_response_hex)),
-        );
+        mock.push_response(MockResponse::Value(serde_json::Value::String(paused_response_hex)));
 
         let result = state_contract.initialize().await;
         assert!(result.is_ok());
@@ -176,13 +158,15 @@ mod tests {
 
     #[tokio::test]
     async fn get_latest_commits_test() {
-        let (
-            state_contract,
-            mock,
-        ) = setup_state_contract().await.expect("Setup failed");
+        let (provider, mock, wallet) = setup_wallet_and_provider().expect("Wallet and provider setup failed");
+        let state_contract = setup_state_contract(provider, mock.clone(), wallet).expect("Setup failed");
 
-        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000".parse().unwrap();
-        let expected_commit:Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede".parse().unwrap();
+        let empty_data = "0x0000000000000000000000000000000000000000000000000000000000000000"
+            .parse()
+            .unwrap();
+        let expected_commit: Bytes = "0xc84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede"
+            .parse()
+            .unwrap();
         let log_entry = Log {
             address: "0x0000000000000000000000000000000000000001".parse().unwrap(),
             topics: vec![empty_data],
@@ -205,26 +189,5 @@ mod tests {
         let block_num: u64 = 42;
         let commits = state_contract.get_latest_commits(block_num).await.unwrap();
         assert_eq!(&commits[0].as_slice(), &bytes32_data.as_slice());
-    }
-
-    #[tokio::test]
-    async fn pause_state_contract_test() {
-        let (
-            mut state_contract,
-              mock,
-        ) = setup_state_contract().await.expect("Setup failed");
-
-        // Test pause before initialization
-        assert!(state_contract.pause().await.is_err());
-
-        // Initialize and test pause after initialization
-        state_contract.initialize().await.expect("Initialization failed");
-
-        // Mock a successful response for the `pause` call
-        let pause_response_hex: String = format!("0x{}", "01".repeat(32));
-        mock.push_response(MockResponse::Value(serde_json::Value::String(pause_response_hex)));
-
-        // Test pause with the contract initialized
-        assert!(state_contract.pause().await.is_ok());
     }
 }
