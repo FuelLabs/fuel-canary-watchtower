@@ -94,17 +94,17 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
     alerts.start_alert_handling_thread();
 
     let actions = WatchtowerEthereumActions::new(
-        alerts.get_alert_sender(),
+        alerts.alert_sender(),
         arc_state_contract.clone(),
         arc_portal_contract.clone(),
         arc_gateway_contract.clone(),
     );
-    actions.start_action_handling_thread();
+    let actions_thread = actions.start_action_handling_thread().await?;
 
     let ethereum_thread = start_ethereum_watcher(
         config,
         actions.get_action_sender(),
-        alerts.get_alert_sender(),
+        alerts.alert_sender(),
         &arc_fuel_chain,
         &arc_ethereum_chain,
         &arc_state_contract,
@@ -116,11 +116,11 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
         config,
         &arc_fuel_chain,
         actions.get_action_sender(),
-        alerts.get_alert_sender(),
+        alerts.alert_sender(),
     )
     .await?;
 
-    handle_watcher_threads(fuel_thread, ethereum_thread, alerts.get_alert_sender())
+    handle_watcher_threads(actions_thread, fuel_thread, ethereum_thread, alerts.alert_sender())
         .await
         .unwrap();
 
@@ -128,10 +128,22 @@ pub async fn run(config: &WatchtowerConfig) -> Result<()> {
 }
 
 async fn handle_watcher_threads(
+    actions_thread: JoinHandle<()>,
     fuel_thread: JoinHandle<()>,
     ethereum_thread: JoinHandle<()>,
     alert_sender: UnboundedSender<AlertParams>,
 ) -> Result<()> {
+
+    if let Err(e) = actions_thread.await {
+        send_alert(
+            &alert_sender.clone(),
+            String::from("Actions thread failed"),
+            format!("Error: {}", e),
+            AlertLevel::Error,
+        );
+        return Err(anyhow::anyhow!("Actions thread failed: {}", e));
+    }
+
     if let Err(e) = ethereum_thread.await {
         send_alert(
             &alert_sender.clone(),

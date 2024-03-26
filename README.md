@@ -37,7 +37,7 @@ If you require alerting you must set your [PagerDuty](https://www.pagerduty.com/
 export WATCHTOWER_PAGERDUTY_KEY=KEY-HERE
 ```
 
-If you require automated pausing of contracts you must set your ethereum private key as such:
+If you require automated pausing of contracts you must set your Ethereum private key as such:
 
 ```sh
 export WATCHTOWER_ETH_PRIVATE_KEY=KEY-HERE

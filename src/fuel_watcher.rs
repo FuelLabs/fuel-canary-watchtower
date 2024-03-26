@@ -277,11 +277,16 @@ mod tests {
         let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
         check_fuel_chain_connection(&fuel_chain, action_sender, alert_sender, &watch_config).await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Fuel Chain: Failed to check connection"), 
+            String::from("Error: Connection error"),
+            AlertLevel::Warn,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Fuel Chain: Failed to check connection"));
-            assert!(alert.is_description_equal("Error: Connection error"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -422,11 +427,16 @@ mod tests {
         let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
         check_fuel_block_production(&fuel_chain, action_sender, alert_sender, &watch_config).await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Fuel Chain: Failed to check get latest block"), 
+            String::from("Error: Error fetching block time"),
+            AlertLevel::Error,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Fuel Chain: Failed to check get latest block"));
-            assert!(alert.is_description_equal("Error: Error fetching block time"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -465,11 +475,16 @@ mod tests {
         let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
         check_fuel_block_production(&fuel_chain, action_sender, alert_sender, &watch_config).await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Fuel Chain: block is taking longer than 60 seconds"), 
+            String::from("Last block was 70 seconds ago"),
+            AlertLevel::Warn,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Fuel Chain: block is taking longer than 60 seconds"));
-            assert!(alert.is_description_equal("Last block was 70 seconds ago"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -551,11 +566,16 @@ mod tests {
         let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
         check_fuel_base_asset_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Fuel Chain: Failed to check fuel chain for base asset ETH withdrawals"), 
+            String::from("Error: Error fetching withdrawal amount"),
+            AlertLevel::Error,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Fuel Chain: Failed to check fuel chain for base asset ETH withdrawals"));
-            assert!(alert.is_description_equal("Error: Error fetching withdrawal amount"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -686,11 +706,16 @@ mod tests {
         let fuel_chain = Arc::new(mock_fuel_chain) as Arc<dyn FuelChainTrait>;
         check_fuel_token_withdrawals(&fuel_chain, action_sender, alert_sender, &watch_config).await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Fuel Chain: Failed to check fuel chain for ERC20 USDC withdrawals at address 0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"), 
+            String::from("Error: Error fetching withdrawal amount"),
+            AlertLevel::Error,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Fuel Chain: Failed to check fuel chain for ERC20 USDC withdrawals at address 0x3a0126dfe64631f1caaebccbdb334570f40bcdc2426fd3c87e9ac690b2fa3964"));
-            assert!(alert.is_description_equal("Error: Error fetching withdrawal amount"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
