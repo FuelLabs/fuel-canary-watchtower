@@ -66,7 +66,7 @@ An example config file can be found at [watchtower_config.json.example](./watcht
 ]
 ```
 
-In the above configuration is the ETH base asset has exceed the threshold of `250ETH` being deposited over a period of 300 seconds an alert of type INFO is sent and the Portal contract will be paused.
+In the above configuration, ETH has exceeded the threshold of `250ETH` being deposited over a period of 300 seconds, an alert of type INFO is sent, and the Portal contract will be paused.
 
 ### ABI
 
