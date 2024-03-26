@@ -31,11 +31,11 @@ impl PagerDutyClient {
 }
 ```
 
-If we fail to send an alert to PagerDuty it is not retried but it is still logged. We could have list of alerts that is retried when PagerDuty is un-reachable. A better solution would be to have multiple alerting channels like Telegram/OpsGenie/Twillio to have more redundancy sources something like we have here : [Panic Alerting](https://github.com/SimplyStaking/panic/blob/master/docs/DESIGN_AND_FEATURES.md#alerting-channels).
+If we fail to send an alert to PagerDuty it is not retried but it is still logged. We could have a list of alerts that is retried when PagerDuty is un-reachable. A better solution would be to have multiple alerting channels like Telegram/OpsGenie/Twillio to have more redundancy sources something like we have here : [Panic Alerting](https://github.com/SimplyStaking/panic/blob/master/docs/DESIGN_AND_FEATURES.md#alerting-channels).
 
 ## Using backoff mechanism instead of Retries
 
-An example can be found here in `src/ethereu_watcher/ethereum_chain.rs`:
+An example can be found here in `src/ethereum_watcher/ethereum_chain.rs`:
 
 ```rust
     for _ in 0..ETHEREUM_CONNECTION_RETRIES {
