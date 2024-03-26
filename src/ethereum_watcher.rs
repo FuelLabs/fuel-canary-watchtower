@@ -700,11 +700,16 @@ mod tests {
         let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
         check_eth_chain_connection(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Failed to check connection"), 
+            String::from("Error: connection failed"),
+            AlertLevel::Warn,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Failed to check connection"));
-            assert!(alert.is_description_equal("Error: connection failed"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -779,11 +784,16 @@ mod tests {
         let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
         check_eth_block_production(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: block is taking longer than 20 seconds"), 
+            String::from("Last block was 25 seconds ago"),
+            AlertLevel::Warn,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: block is taking longer than 20 seconds"));
-            assert!(alert.is_description_equal("Last block was 25 seconds ago"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -826,11 +836,16 @@ mod tests {
         let ethereum_chain = Arc::new(mock_ethereum_chain) as Arc<dyn EthereumChainTrait>;
         check_eth_block_production(&ethereum_chain, action_sender, alert_sender, &watch_config).await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Failed to check get latest block"), 
+            String::from("Error: Failed to get block time"),
+            AlertLevel::Error,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Failed to check get latest block"));
-            assert!(alert.is_description_equal("Error: Failed to get block time"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -956,11 +971,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Ethereum account 0x123 is low on funds"), 
+            String::from("Current balance: 500"),
+            AlertLevel::Warn,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Ethereum account 0x123 is low on funds"));
-            assert!(alert.is_description_equal("Current balance: 500"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -1155,11 +1175,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Invalid commit was made on the state contract"), 
+            String::from("Block Hash: c84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede not found on the fuel chain"),
+            AlertLevel::Warn,
+        );
+
         // Check if the alert was sent
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Invalid commit was made on the state contract"));
-            assert!(alert.is_description_equal("Block Hash: c84e7c26f85536eb8c9c1928f89c10748dd11232a3f86826e67f5caee55ceede not found on the fuel chain"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert was not sent");
         }
@@ -1294,11 +1319,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Failed to check state contract"), 
+            String::from("Error: Error fetching commits"),
+            AlertLevel::Error,
+        );
+
         // Assert that an alert was sent due to the error in fetching commits
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Failed to check state contract"));
-            assert!(alert.is_description_equal("Error: Error fetching commits"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for state contract error was not sent");
         }
@@ -1445,11 +1475,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: ETH is above deposit threshold 100ETH for a period of 60 seconds"), 
+            String::from("Amount deposited: 150ETH"),
+            AlertLevel::Warn,
+        );
+
         // Assertions to ensure alert and action are triggered
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: ETH is above deposit threshold 100ETH for a period of 60 seconds"));
-            assert!(alert.is_description_equal("Amount deposited: 150ETH"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for portal contract error was not sent");
         }
@@ -1511,11 +1546,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Failed to check portal contract for ETH deposits"), 
+            String::from("Error: mock error"),
+            AlertLevel::Error,
+        );
+
         // Assertions to ensure alert and action are triggered due to error
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Failed to check portal contract for ETH deposits"));
-            assert!(alert.is_description_equal("Error: mock error"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for failed deposit check was not sent");
         }
@@ -1632,11 +1672,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: ETH is above withdrawal threshold 100ETH for a period of 60 seconds"), 
+            String::from("Amount withdrawn: 150ETH"),
+            AlertLevel::Warn,
+        );
+
         // Assertions to ensure alert and action are triggered
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: ETH is above withdrawal threshold 100ETH for a period of 60 seconds"));
-            assert!(alert.is_description_equal("Amount withdrawn: 150ETH"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for failed deposit check was not sent");
         }
@@ -1698,11 +1743,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Failed to check portal contract for ETH withdrawals"), 
+            String::from("Error: mock error"),
+            AlertLevel::Error,
+        );
+
         // Assertions to ensure alert and action are triggered due to error
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Failed to check portal contract for ETH withdrawals"));
-            assert!(alert.is_description_equal("Error: mock error"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for failed withdrawals check was not sent");
         }
@@ -1818,11 +1868,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above deposit threshold 100USDC for a period of 60 seconds"), 
+            String::from("Amount deposited: 150USDC"),
+            AlertLevel::Warn,
+        );
+
         // Assertions to ensure alert and action are triggered
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above deposit threshold 100USDC for a period of 60 seconds"));
-            assert!(alert.is_description_equal("Amount deposited: 150USDC"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for gateway contract error was not sent");
         }
@@ -1926,11 +1981,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Failed to check gateway contract for USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"), 
+            String::from("Error: mock error"),
+            AlertLevel::Error,
+        );
+
         // Assertions to ensure alert and action are triggered due to error
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Failed to check gateway contract for USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
-            assert!(alert.is_description_equal("Error: mock error"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for gateway contract error was not sent");
         }
@@ -2011,11 +2071,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above withdrawal threshold 100USDC for a period of 60 seconds"), 
+            String::from("Amount withdrawn: 150USDC"),
+            AlertLevel::Warn,
+        );
+
         // Assertions to ensure alert and action are triggered
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 is above withdrawal threshold 100USDC for a period of 60 seconds"));
-            assert!(alert.is_description_equal("Amount withdrawn: 150USDC"));
-            assert!(alert.is_level_equal(AlertLevel::Warn));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for gateway contract error was not sent");
         }
@@ -2120,11 +2185,16 @@ mod tests {
         )
         .await;
 
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from("Ethereum Chain: Failed to check gateway contract for USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"), 
+            String::from("Error: mock error"),
+            AlertLevel::Error,
+        );
+
         // Assertions to ensure alert and action are triggered due to error
         if let Ok(alert) = alert_receiver.try_recv() {
-            assert!(alert.is_name_equal("Ethereum Chain: Failed to check gateway contract for USDC at address 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"));
-            assert!(alert.is_description_equal("Error: mock error"));
-            assert!(alert.is_level_equal(AlertLevel::Error));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Alert for failed withdrawal check was not sent");
         }

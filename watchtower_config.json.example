@@ -18,6 +18,9 @@
     "connection_alert": {
       "alert_level": "Warn"
     },
+    "query_alert": {
+      "alert_level": "Warn"
+    },
     "block_production_alert": {
       "alert_level": "Warn",
       "max_block_time": 10 
@@ -53,6 +56,9 @@
   },
   "ethereum_client_watcher": {
     "connection_alert": {
+      "alert_level": "Warn"
+    },
+    "query_alert": {
       "alert_level": "Warn"
     },
     "block_production_alert": {

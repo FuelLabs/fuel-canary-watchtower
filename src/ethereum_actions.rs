@@ -15,6 +15,7 @@ use crate::ethereum_watcher::state_contract::StateContractTrait;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
+use tokio::task::JoinHandle;
 
 pub static THREAD_CONNECTIONS_ERR: &str = "Connections to the ethereum actions thread have all closed";
 
@@ -93,14 +94,14 @@ impl WatchtowerEthereumActions {
         }
     }
 
-    pub fn start_action_handling_thread(&self) {
+    pub async fn start_action_handling_thread(&self) -> Result<JoinHandle<()>> {
         let action_receiver = Arc::clone(&self.action_receiver);
         let alert_sender = self.alert_sender.clone();
         let state_contract = Arc::clone(&self.state_contract);
         let portal_contract = Arc::clone(&self.portal_contract);
         let gateway_contract = Arc::clone(&self.gateway_contract);
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut rx = action_receiver.lock().await;
             while let Some(params) = rx.recv().await {
                 Self::handle_action(
@@ -120,6 +121,8 @@ impl WatchtowerEthereumActions {
                 AlertLevel::Error,
             );
         });
+
+        Ok(handle)
     }
 
     async fn pause_contract<F>(
@@ -246,11 +249,17 @@ mod tests {
         expected_description: &str,
         expected_level: AlertLevel,
     ) {
+
+        // Create the expected alert we will compare the actual one too.
+        let  expected_alert = AlertParams::new(
+            String::from(expected_name), 
+            String::from(expected_description),
+            expected_level,
+        );
+
         if let Some(alert) = alert_receiver.recv().await {
             println!("{:?}", alert);
-            assert!(alert.is_name_equal(expected_name));
-            assert!(alert.is_description_equal(expected_description));
-            assert!(alert.is_level_equal(expected_level));
+            assert_eq!(alert, expected_alert);
         } else {
             panic!("Expected alert not received");
         }
@@ -284,8 +293,8 @@ mod tests {
         };
 
         // Start the action handling thread
-        actions.start_action_handling_thread();
-
+        let _ = actions.start_action_handling_thread().await;
+    
         send_action(&action_sender, EthereumAction::PauseState, Some(AlertLevel::Info));
 
         assert_alert_received(
@@ -338,7 +347,7 @@ mod tests {
         };
 
         // Start the action handling thread
-        actions.start_action_handling_thread();
+        let _ = actions.start_action_handling_thread().await;
 
         // Send a PauseState action
         send_action(&action_sender, EthereumAction::PauseState, Some(AlertLevel::Error));
@@ -385,7 +394,7 @@ mod tests {
             gateway_contract: Arc::new(mock_gateway_contract),
         };
 
-        actions.start_action_handling_thread();
+        let _ = actions.start_action_handling_thread().await;
 
         // Send a PauseState action
         send_action(
@@ -436,7 +445,7 @@ mod tests {
             gateway_contract: Arc::new(mock_gateway_contract),
         };
 
-        actions.start_action_handling_thread();
+        let _ = actions.start_action_handling_thread().await;
 
         send_action(&action_sender, EthereumAction::PauseGateway, Some(AlertLevel::Info));
 
@@ -482,7 +491,7 @@ mod tests {
             gateway_contract: Arc::new(mock_gateway_contract),
         };
 
-        actions.start_action_handling_thread();
+        let _ = actions.start_action_handling_thread().await;
 
         send_action(&action_sender, EthereumAction::PausePortal, Some(AlertLevel::Info));
 
@@ -534,7 +543,7 @@ mod tests {
             gateway_contract: Arc::new(mock_gateway_contract),
         };
 
-        actions.start_action_handling_thread();
+        let _ = actions.start_action_handling_thread().await;
 
         // Send a PauseAll action
         send_action(&actions.action_sender, EthereumAction::PauseAll, Some(AlertLevel::Info));

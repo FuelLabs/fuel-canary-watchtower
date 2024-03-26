@@ -18,7 +18,7 @@ pub enum AlertLevel {
     Error,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct AlertParams {
     name: String,
     description: String,
@@ -32,21 +32,6 @@ impl AlertParams {
             description,
             alert_level,
         }
-    }
-
-    #[cfg(test)]
-    pub fn is_name_equal(&self, name: &str) -> bool {
-        self.name == name
-    }
-
-    #[cfg(test)]
-    pub fn is_description_equal(&self, description: &str) -> bool {
-        self.description == description
-    }
-
-    #[cfg(test)]
-    pub fn is_level_equal(&self, alert_level: AlertLevel) -> bool {
-        self.alert_level == alert_level
     }
 }
 
@@ -165,7 +150,7 @@ impl WatchtowerAlerter {
         }
     }
 
-    pub fn get_alert_sender(&self) -> UnboundedSender<AlertParams> {
+    pub fn alert_sender(&self) -> UnboundedSender<AlertParams> {
         self.alert_sender.clone()
     }
 
